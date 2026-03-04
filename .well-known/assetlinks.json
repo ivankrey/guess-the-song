@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.ivankrey.guessthesong",
+        "sha256_cert_fingerprints": ["88:CE:C8:F6:6D:87:B9:49:4D:B0:35:01:B0:08:77:9E:00:E6:F2:F1:B7:88:22:B7:70:45:A4:A8:55:0D:73:DF"]
+      }
+    }]
