@@ -1,0 +1,26 @@
+{
+  "name": "Угадай песню",
+  "short_name": "Угадай песню",
+  "description": "Музыкальная игра для компании друзей",
+  "start_url": "/guess-the-song/",
+  "scope": "/guess-the-song/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#110f1f",
+  "theme_color": "#f59e0b",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

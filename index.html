@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Угадай песню</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f59e0b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+</script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #110f1f; color: #e2e0ea; min-height: 100vh; overflow-x: hidden; }
+  .container { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
+
+  /* Buttons */
+  .btn { width: 100%; padding: 15px; border-radius: 14px; border: none; font-weight: 900; font-size: 15px; cursor: pointer; text-align: center; transition: all 0.2s; }
+  .btn-primary { background: linear-gradient(135deg, #7c3aed, #4f46e5); color: #fff; box-shadow: 0 4px 20px rgba(124,58,237,0.35); }
+  .btn-primary:disabled { background: #1a1730; color: #3d3860; box-shadow: none; border: 1px solid #2d2a42; cursor: default; }
+  .btn-orange { background: linear-gradient(135deg, #f59e0b, #ea580c); color: #000; box-shadow: 0 4px 16px rgba(245,158,11,0.35); }
+  .btn-orange:disabled { background: #1a1730; color: #3d3860; box-shadow: none; border: 1px solid #2d2a42; cursor: default; }
+
+  /* Cards */
+  .card { background: #1e1b2e; border: 1px solid #302d45; border-radius: 14px; padding: 16px; margin-bottom: 10px; }
+  .panel { background: #1a1730; border: 1px solid #2d2a42; border-radius: 16px; padding: 18px; margin-bottom: 20px; }
+
+  /* Inputs */
+  input[type="text"] { width: 100%; background: #151225; border: 1px solid #3b3558; border-radius: 10px; padding: 12px 14px; color: #e2e0ea; font-size: 14px; outline: none; transition: border 0.2s; }
+  input[type="text"]:focus { border-color: #f59e0b80; }
+  input[type="text"]::placeholder { color: #4a456880; }
+
+  /* Label */
+  .lbl { color: #8b85a8; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; display: block; }
+
+  /* Avatar */
+  .ava { width: 30px; height: 30px; border-radius: 8px; background: #2a2740; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #a5a0c0; flex-shrink: 0; }
+  .ava-sm { width: 28px; height: 28px; border-radius: 7px; font-size: 12px; }
+
+  /* Search results */
+  .sr { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; cursor: pointer; transition: background 0.15s; }
+  .sr:hover, .sr:active { background: #2a2740; }
+  .sr img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: #222040; flex-shrink: 0; }
+  .sr-title { color: #d4d0e8; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sr-sub { color: #6b6490; font-size: 11px; margin-top: 2px; }
+
+  /* Audio player */
+  .player { background: #1a1730; border: 1px solid #302d45; border-radius: 16px; padding: 16px; }
+  .player.compact { border-radius: 12px; padding: 12px; }
+  .play-btn { width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+  .play-btn.compact { width: 36px; height: 36px; }
+  .play-btn.playing { background: #f59e0b; box-shadow: 0 2px 16px rgba(245,158,11,0.35); }
+  .play-btn:not(.playing) { background: #2a2740; }
+  .progress-bar { flex: 1; height: 6px; background: #2a2740; border-radius: 3px; cursor: pointer; position: relative; overflow: hidden; }
+  .progress-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #f59e0b, #ea580c); transition: width 0.15s; }
+
+  /* Guess buttons */
+  .guess-btn { padding: 10px 20px; border-radius: 10px; border: none; font-weight: 800; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+  .guess-btn.active { background: #2a2740; color: #c8c4dc; }
+  .guess-btn.active:hover { background: #353050; }
+  .guess-btn.selected { background: #f59e0b; color: #000; box-shadow: 0 2px 12px rgba(245,158,11,0.35); cursor: default; }
+  .guess-btn.disabled { background: #18162a; color: #302d45; cursor: default; }
+
+  /* Results */
+  .result-correct { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.25); border-radius: 10px; padding: 9px 14px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .result-wrong { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 10px; padding: 9px 14px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+
+  /* Progress top bar */
+  .top-progress { width: 100%; height: 4px; background: #1e1b2e; border-radius: 4px; margin-bottom: 24px; overflow: hidden; }
+  .top-progress-fill { height: 100%; background: linear-gradient(90deg, #f59e0b, #ea580c); border-radius: 4px; transition: width 0.5s; }
+
+  /* Animations */
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .loading { animation: pulse 1s infinite; color: #f59e0b; font-size: 12px; margin-top: 8px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3b3558; border-radius: 2px; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="container" id="app"></div>
+
+<script>
+const $ = (s, p) => (p || document).querySelector(s);
+const $$ = (s, p) => [...(p || document).querySelectorAll(s)];
+
+let state = {
+  phase: "setup",
+  players: {},
+  currentName: "",
+  slots: [null, null, null],
+  shuffled: [],
+  idx: 0,
+  guesses: {},
+};
+
+function getNames() { return Object.keys(state.players); }
+function getTotal() { return Object.values(state.players).flat().length; }
+
+// ═══════ DEEZER SEARCH ═══════
+async function deezerSearch(query) {
+  try {
+    const r = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=8&output=jsonp&callback=?`);
+    const d = await r.json();
+    if (d.data?.length) return d.data.filter(t => t.preview).map(t => ({
+      id: t.id, title: t.title_short || t.title, artist: t.artist?.name || "",
+      album: t.album?.title || "", cover: t.album?.cover_medium || "", preview: t.preview,
+    }));
+  } catch {}
+  // JSONP fallback
+  try {
+    return await new Promise((resolve, reject) => {
+      const cb = '_dz_' + Math.random().toString(36).slice(2);
+      window[cb] = (d) => { delete window[cb]; s.remove(); resolve(d.data?.filter(t => t.preview).map(t => ({ id: t.id, title: t.title_short || t.title, artist: t.artist?.name || "", album: t.album?.title || "", cover: t.album?.cover_medium || "", preview: t.preview })) || []); };
+      const s = document.createElement('script');
+      s.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=8&output=jsonp&callback=${cb}`;
+      s.onerror = () => { delete window[cb]; reject(); };
+      document.head.appendChild(s);
+      setTimeout(() => { if (window[cb]) { delete window[cb]; s.remove(); reject(); } }, 8000);
+    });
+  } catch {}
+  return null;
+}
+
+// ═══════ AUDIO MANAGER ═══════
+let currentAudio = null;
+
+function stopAudio() {
+  if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0; }
+}
+
+function createPlayer(src, opts = {}) {
+  const { compact, hideTitle, title, artist } = opts;
+  const div = document.createElement('div');
+  div.className = `player${compact ? ' compact' : ''}`;
+
+  const audio = new Audio(src);
+  audio.preload = 'auto';
+  let playing = false;
+
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:' + (compact ? '10' : '14') + 'px';
+
+  const playBtn = document.createElement('button');
+  playBtn.className = `play-btn${compact ? ' compact' : ''}`;
+  playBtn.innerHTML = playSvg(compact ? 16 : 20);
+
+  const right = document.createElement('div');
+  right.style.cssText = 'flex:1;min-width:0';
+
+  if (!hideTitle && title) {
+    const titleEl = document.createElement('p');
+    titleEl.style.cssText = `color:#e2e0ea;font-size:${compact ? 12 : 14}px;font-weight:700;margin:0 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
+    titleEl.textContent = title + (artist ? ` — ${artist}` : '');
+    right.appendChild(titleEl);
+  }
+
+  const progRow = document.createElement('div');
+  progRow.style.cssText = 'display:flex;align-items:center;gap:8px';
+
+  const bar = document.createElement('div');
+  bar.className = 'progress-bar';
+  const fill = document.createElement('div');
+  fill.className = 'progress-fill';
+  fill.style.width = '0%';
+  bar.appendChild(fill);
+
+  const timeEl = document.createElement('span');
+  timeEl.style.cssText = 'color:#6b6490;font-size:11px;font-weight:700;flex-shrink:0;min-width:70px;text-align:right';
+  timeEl.textContent = '0:00 / 0:00';
+
+  progRow.append(bar, timeEl);
+  right.appendChild(progRow);
+  row.append(playBtn, right);
+  div.appendChild(row);
+
+  const fmt = (s) => isNaN(s) || !s ? '0:00' : `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`;
+
+  audio.addEventListener('timeupdate', () => {
+    fill.style.width = audio.duration ? `${(audio.currentTime/audio.duration)*100}%` : '0%';
+    timeEl.textContent = `${fmt(audio.currentTime)} / ${fmt(audio.duration)}`;
+  });
+  audio.addEventListener('ended', () => { playing = false; playBtn.classList.remove('playing'); playBtn.innerHTML = playSvg(compact ? 16 : 20); fill.style.width = '0%'; });
+  audio.addEventListener('play', () => { playing = true; playBtn.classList.add('playing'); playBtn.innerHTML = pauseSvg(compact ? 16 : 20); });
+  audio.addEventListener('pause', () => { playing = false; playBtn.classList.remove('playing'); playBtn.innerHTML = playSvg(compact ? 16 : 20); });
+
+  playBtn.onclick = () => {
+    if (playing) { audio.pause(); }
+    else { stopAudio(); currentAudio = audio; audio.play().catch(() => {}); }
+  };
+
+  bar.onclick = (e) => {
+    if (!audio.duration) return;
+    audio.currentTime = ((e.clientX - bar.getBoundingClientRect().left) / bar.offsetWidth) * audio.duration;
+  };
+
+  div._audio = audio;
+  return div;
+}
+
+function playSvg(s) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="#c8c4dc" stroke="none"><polygon points="5,3 19,12 5,21"/></svg>`; }
+function pauseSvg(s) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="${'#000'}" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>`; }
+
+// ═══════ RENDER ═══════
+function render() {
+  const app = $('#app');
+  app.innerHTML = '';
+  stopAudio();
+
+  if (state.phase === 'setup') renderSetup(app);
+  else if (state.phase === 'game') renderGame(app);
+  else renderResults(app);
+}
+
+// ═══════ SETUP ═══════
+function renderSetup(app) {
+  const names = getNames();
+  const total = getTotal();
+
+  app.innerHTML = `
+    <div style="text-align:center;margin-bottom:36px">
+      <div style="display:inline-flex;width:60px;height:60px;border-radius:16px;background:linear-gradient(135deg,#f59e0b,#ea580c);align-items:center;justify-content:center;margin-bottom:12px;box-shadow:0 8px 24px rgba(245,158,11,0.3)">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </div>
+      <h1 style="font-size:28px;font-weight:900;color:#fff;margin:8px 0 4px">Угадай песню</h1>
+      <p style="color:#6b6490;font-size:13px">Найдите песню, послушайте превью и угадайте</p>
+    </div>
+
+    <div style="margin-bottom:20px">
+      <label class="lbl">Имя участника</label>
+      <input type="text" id="nameInput" placeholder="Как вас зовут?" value="${state.currentName}">
+    </div>
+
+    <div id="slotsArea" class="${state.currentName.trim() ? '' : 'hidden'}" style="margin-bottom:20px">
+      <label class="lbl">Песни для «<span id="nameLabel">${state.currentName.trim()}</span>»</label>
+      <div id="slotsContainer"></div>
+      <button class="btn btn-orange" id="addPlayerBtn" disabled>Добавить песни</button>
+    </div>
+
+    <div id="playersPanel" class="${names.length ? '' : 'hidden'}">
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px">
+          <span class="lbl">Участники</span>
+          <span style="color:#6b6490;font-size:12px">Песен: ${total}</span>
+        </div>
+        <div id="playersList"></div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="startBtn" ${total < 2 ? 'disabled' : ''}>
+      ▶ Начать игру
+    </button>
+    ${total > 0 && total < 2 ? '<p style="text-align:center;color:#4a4568;font-size:12px;margin-top:8px">Нужно минимум 2 песни</p>' : ''}
+  `;
+
+  // Name input
+  const nameInput = $('#nameInput');
+  nameInput.addEventListener('input', () => {
+    state.currentName = nameInput.value;
+    const area = $('#slotsArea');
+    const label = $('#nameLabel');
+    if (state.currentName.trim()) { area.classList.remove('hidden'); label.textContent = state.currentName.trim(); }
+    else area.classList.add('hidden');
+    updateAddBtn();
+  });
+
+  // Render slots
+  renderSlots();
+
+  // Render players list
+  const pl = $('#playersList');
+  names.forEach(n => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;background:#222040;border-radius:10px;padding:10px 14px;margin-bottom:6px';
+    row.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="ava">${n[0].toUpperCase()}</div>
+        <span style="font-weight:700;color:#d4d0e8;font-size:14px">${n}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="color:#f59e0b;font-size:13px;font-weight:700">${state.players[n].length} 🎵</span>
+        <button style="background:none;border:none;cursor:pointer;padding:4px;line-height:0" data-del="${n}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b6490" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>`;
+    row.querySelector('[data-del]').onclick = () => { delete state.players[n]; render(); };
+    pl.appendChild(row);
+  });
+
+  // Add player button
+  $('#addPlayerBtn').onclick = () => {
+    const n = state.currentName.trim();
+    if (!n || state.players[n] || !state.slots[0]) return;
+    state.players[n] = state.slots.filter(Boolean);
+    state.currentName = ''; state.slots = [null, null, null];
+    render();
+  };
+
+  // Start button
+  $('#startBtn').onclick = () => {
+    if (total < 2) return;
+    const all = [];
+    for (const [author, songs] of Object.entries(state.players))
+      for (const s of songs) all.push({ ...s, author });
+    for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
+    state.shuffled = all; state.idx = 0; state.guesses = {}; state.phase = 'game';
+    render();
+  };
+}
+
+function updateAddBtn() {
+  const btn = $('#addPlayerBtn');
+  if (!btn) return;
+  const n = state.currentName.trim();
+  btn.disabled = !(n && state.slots[0] && !state.players[n]);
+}
+
+function renderSlots() {
+  const container = $('#slotsContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  state.slots.forEach((song, i) => {
+    const slot = document.createElement('div');
+    slot.className = 'card';
+
+    if (song) {
+      slot.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" style="flex-shrink:0"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <span style="color:#e2e0ea;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${song.title} — ${song.artist}</span>
+          </div>
+          <button style="background:#2a2740;border:none;border-radius:7px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" data-remove="${i}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>`;
+      const player = createPlayer(song.preview, { compact: true, title: song.title, artist: song.artist });
+      slot.appendChild(player);
+      slot.querySelector('[data-remove]').onclick = () => { state.slots[i] = null; renderSlots(); updateAddBtn(); };
+    } else {
+      const label = document.createElement('span');
+      label.style.cssText = 'color:#9990b0;font-size:12px;font-weight:700;display:block;margin-bottom:10px';
+      label.textContent = `Песня ${i+1} ${i === 0 ? '(обязательна)' : '(необязат.)'}`;
+      slot.appendChild(label);
+
+      const searchRow = document.createElement('div');
+      searchRow.style.cssText = 'display:flex;gap:8px';
+      const input = document.createElement('input');
+      input.type = 'text'; input.placeholder = 'Название или исполнитель...';
+      input.style.cssText = 'flex:1';
+      const btn = document.createElement('button');
+      btn.style.cssText = 'background:#f59e0b;color:#000;border:none;border-radius:10px;padding:11px 16px;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0;display:flex;align-items:center;gap:6px';
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Найти`;
+
+      const resultsDiv = document.createElement('div');
+      resultsDiv.style.marginTop = '10px';
+
+      const doSearch = async () => {
+        if (!input.value.trim()) return;
+        btn.innerHTML = '⏳'; btn.disabled = true;
+        resultsDiv.innerHTML = '<p class="loading">⏳ Ищем на Deezer...</p>';
+        const data = await deezerSearch(input.value.trim());
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Найти`;
+        btn.disabled = false;
+        resultsDiv.innerHTML = '';
+
+        if (!data || !data.length) {
+          resultsDiv.innerHTML = '<p style="color:#ef4444;font-size:12px">Не найдено. Попробуйте другой запрос.</p>';
+          return;
+        }
+        data.forEach(t => {
+          const row = document.createElement('div');
+          row.className = 'sr';
+          row.innerHTML = `
+            <img src="${t.cover}" alt="" onerror="this.style.display='none'">
+            <div style="min-width:0;flex:1">
+              <div class="sr-title">${t.title}</div>
+              <div class="sr-sub">${t.artist}${t.album ? ' · ' + t.album : ''}</div>
+            </div>`;
+          row.onclick = () => {
+            state.slots[i] = t;
+            renderSlots();
+            updateAddBtn();
+          };
+          resultsDiv.appendChild(row);
+        });
+      };
+
+      input.onkeydown = (e) => { if (e.key === 'Enter') doSearch(); };
+      btn.onclick = doSearch;
+      searchRow.append(input, btn);
+      slot.append(searchRow, resultsDiv);
+    }
+    container.appendChild(slot);
+  });
+}
+
+// ═══════ GAME ═══════
+function renderGame(app) {
+  const names = getNames();
+  const cur = state.shuffled[state.idx];
+  const allVoted = names.every(n => state.guesses[`${state.idx}-${n}`]);
+
+  app.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);display:flex;align-items:center;justify-content:center">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </div>
+        <span style="font-size:18px;font-weight:900;color:#fff">Раунд ${state.idx + 1}</span>
+      </div>
+      <div style="background:#1e1b2e;border-radius:20px;padding:6px 16px;font-weight:800;font-size:14px;color:#8b85a8">${state.idx + 1} / ${state.shuffled.length}</div>
+    </div>
+
+    <div class="top-progress"><div class="top-progress-fill" style="width:${((state.idx+1)/state.shuffled.length)*100}%"></div></div>
+
+    <div id="playerArea" style="margin-bottom:24px"></div>
+
+    <p style="text-align:center;color:#6b6490;font-size:12px;margin:-16px 0 20px">🎧 Послушайте и угадайте — чья это песня?</p>
+
+    <div id="votingArea"></div>
+
+    <button class="btn btn-primary" id="nextBtn" ${allVoted ? '' : 'disabled'} style="margin-top:24px">
+      ${state.idx < state.shuffled.length - 1 ? 'Дальше →' : 'Результаты 🏆'}
+    </button>
+    ${!allVoted ? '<p style="text-align:center;color:#4a4568;font-size:12px;margin-top:8px">Ждём выбор от всех</p>' : ''}
+  `;
+
+  // Player
+  const playerArea = $('#playerArea');
+  const player = createPlayer(cur.preview, { title: '🎵  Чья это песня?' });
+  playerArea.appendChild(player);
+
+  // Voting
+  const votingArea = $('#votingArea');
+  names.forEach(voter => {
+    const g = state.guesses[`${state.idx}-${voter}`];
+    const panel = document.createElement('div');
+    panel.style.cssText = 'background:#1a1730;border:1px solid #2d2a42;border-radius:14px;padding:16px;margin-bottom:10px';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px';
+    header.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="ava ava-sm">${voter[0].toUpperCase()}</div>
+        <span style="font-weight:800;font-size:14px;color:#d4d0e8">${voter}</span>
+      </div>
+      ${g ? `<span style="color:#f59e0b;font-size:12px;font-weight:700;background:#2a2740;padding:4px 12px;border-radius:8px">→ ${g.guessed}</span>` : ''}`;
+
+    const btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
+    names.forEach(opt => {
+      const b = document.createElement('button');
+      b.className = `guess-btn ${g ? (g.guessed === opt ? 'selected' : 'disabled') : 'active'}`;
+      b.textContent = opt;
+      b.disabled = !!g;
+      if (!g) b.onclick = () => {
+        state.guesses[`${state.idx}-${voter}`] = { guessed: opt, correct: cur.author, isCorrect: opt === cur.author };
+        render();
+      };
+      btns.appendChild(b);
+    });
+
+    panel.append(header, btns);
+    votingArea.appendChild(panel);
+  });
+
+  // Next
+  $('#nextBtn').onclick = () => {
+    if (!allVoted) return;
+    stopAudio();
+    if (state.idx < state.shuffled.length - 1) state.idx++;
+    else state.phase = 'results';
+    render();
+  };
+}
+
+// ═══════ RESULTS ═══════
+function renderResults(app) {
+  const names = getNames();
+  const sc = {}; names.forEach(n => sc[n] = 0);
+  for (const [k, v] of Object.entries(state.guesses)) {
+    const voter = k.substring(k.indexOf('-') + 1);
+    if (v.isCorrect && voter in sc) sc[voter]++;
+  }
+  const sorted = Object.entries(sc).sort((a, b) => b[1] - a[1]);
+  const top = sorted[0]?.[1] || 0;
+
+  let html = `
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-size:52px;margin-bottom:8px">🏆</div>
+      <h1 style="font-size:26px;font-weight:900;color:#fff;margin:0 0 4px">Результаты</h1>
+      <p style="color:#6b6490;font-size:13px">Кто лучше знает музыкальные вкусы?</p>
+    </div>
+
+    <div class="panel">
+      ${sorted.map(([n, s], i) => {
+        const w = s === top && top > 0;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;background:${w ? 'rgba(245,158,11,0.1)' : '#222040'};border:${w ? '1px solid rgba(245,158,11,0.25)' : '1px solid transparent'};border-radius:12px;padding:12px 18px;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-weight:900;font-size:16px;width:28px;color:${w ? '#f59e0b' : '#4a4568'}">${w ? '👑' : '#'+(i+1)}</span>
+            <span style="font-weight:800;color:${w ? '#fff' : '#8b85a8'}">${n}</span>
+          </div>
+          <div><span style="font-size:24px;font-weight:900;color:${w ? '#f59e0b' : '#4a4568'}">${s}</span><span style="font-size:13px;color:#4a4568;font-weight:700">/${state.shuffled.length}</span></div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <label class="lbl" style="margin-bottom:14px">Все песни</label>
+    <div id="songsDetail"></div>
+
+    <button class="btn btn-primary" id="resetBtn" style="margin-top:8px">↺ Начать заново</button>
+  `;
+  app.innerHTML = html;
+
+  const detail = $('#songsDetail');
+  state.shuffled.forEach((song, si) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'background:#1a1730;border:1px solid #2d2a42;border-radius:16px;padding:18px;margin-bottom:12px';
+
+    let inner = `
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span style="font-weight:800;font-size:14px;color:#d4d0e8">${song.title}</span>
+      </div>
+      ${song.artist ? `<p style="color:#8b85a8;font-size:12px;margin:0 0 2px 19px">${song.artist}</p>` : ''}
+      <p style="color:#f59e0b;font-size:12px;margin:0 0 12px 19px;opacity:0.7">Добавил(а): <b>${song.author}</b></p>
+      <div id="songPlayer${si}" style="margin-bottom:12px"></div>`;
+
+    names.forEach(n => {
+      const g = state.guesses[`${si}-${n}`];
+      if (!g) return;
+      inner += `<div class="${g.isCorrect ? 'result-correct' : 'result-wrong'}">
+        <span style="font-weight:700;color:#b0adc4">${n}</span>
+        <span style="font-weight:800;color:${g.isCorrect ? '#10b981' : '#ef4444'}">→ ${g.guessed} ${g.isCorrect ? '✓' : '✗'}</span>
+      </div>`;
+    });
+
+    div.innerHTML = inner;
+    detail.appendChild(div);
+
+    const playerContainer = div.querySelector(`#songPlayer${si}`);
+    const player = createPlayer(song.preview, { compact: true, title: song.title, artist: song.artist });
+    playerContainer.appendChild(player);
+  });
+
+  $('#resetBtn').onclick = () => {
+    state = { phase: 'setup', players: {}, currentName: '', slots: [null, null, null], shuffled: [], idx: 0, guesses: {} };
+    render();
+  };
+}
+
+// Start
+render();
+</script>
+</body>
+</html>
