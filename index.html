@@ -16,19 +16,43 @@
 </script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { font-family: system-ui, -apple-system, sans-serif; background: #110f1f; color: #e2e0ea; min-height: 100vh; overflow-x: hidden; }
+  :root {
+    --c-bg: #110f1f; --c-text-h: #fff; --c-text: #e2e0ea; --c-text2: #d4d0e8;
+    --c-muted: #6b6490; --c-muted2: #8b85a8; --c-muted3: #4a4568; --c-muted4: #9990b0;
+    --c-dim: #b0adc4; --c-surface: #1e1b2e; --c-surface2: #1a1730; --c-surface3: #222040;
+    --c-el: #2a2740; --c-border: #302d45; --c-border2: #2d2a42;
+  }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--c-bg); color: var(--c-text); min-height: 100vh; overflow-x: hidden; }
   .container { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
+
+  /* Splash */
+  #splash { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #110f1f; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.5s; }
+  #splash.hide { opacity: 0; pointer-events: none; }
+  .splash-icon { width: 90px; height: 90px; border-radius: 22px; background: linear-gradient(135deg, #f59e0b, #ea580c); display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 40px rgba(245,158,11,0.4); animation: splashPulse 1.2s ease-in-out infinite; }
+  @keyframes splashPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+  .splash-title { font-size: 28px; font-weight: 900; color: #fff; margin-top: 20px; }
+  .splash-sub { color: #6b6490; font-size: 14px; margin-top: 6px; }
+  .splash-dots { display: flex; gap: 8px; margin-top: 32px; }
+  .splash-dots span { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; animation: dotBounce 1.2s ease-in-out infinite; }
+  .splash-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .splash-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes dotBounce { 0%,80%,100% { opacity: 0.3; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1.2); } }
+
+  /* Bottom nav */
+  .bottom-nav { display: flex; justify-content: center; gap: 6px; margin-bottom: 24px; }
+  .nav-btn { background: #1e1b2e; border: 1px solid var(--c-border); border-radius: 12px; padding: 10px 20px; color: #6b6490; font-weight: 800; font-size: 13px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+  .nav-btn.active { background: linear-gradient(135deg, #f59e0b, #ea580c); color: #000; border-color: transparent; box-shadow: 0 4px 16px rgba(245,158,11,0.25); }
 
   /* Buttons */
   .btn { width: 100%; padding: 15px; border-radius: 14px; border: none; font-weight: 900; font-size: 15px; cursor: pointer; text-align: center; transition: all 0.2s; }
   .btn-primary { background: linear-gradient(135deg, #7c3aed, #4f46e5); color: #fff; box-shadow: 0 4px 20px rgba(124,58,237,0.35); }
-  .btn-primary:disabled { background: #1a1730; color: #3d3860; box-shadow: none; border: 1px solid #2d2a42; cursor: default; }
+  .btn-primary:disabled { background: #1a1730; color: #3d3860; box-shadow: none; border: 1px solid var(--c-border2); cursor: default; }
   .btn-orange { background: linear-gradient(135deg, #f59e0b, #ea580c); color: #000; box-shadow: 0 4px 16px rgba(245,158,11,0.35); }
-  .btn-orange:disabled { background: #1a1730; color: #3d3860; box-shadow: none; border: 1px solid #2d2a42; cursor: default; }
+  .btn-orange:disabled { background: #1a1730; color: #3d3860; box-shadow: none; border: 1px solid var(--c-border2); cursor: default; }
 
   /* Cards */
-  .card { background: #1e1b2e; border: 1px solid #302d45; border-radius: 14px; padding: 16px; margin-bottom: 10px; }
-  .panel { background: #1a1730; border: 1px solid #2d2a42; border-radius: 16px; padding: 18px; margin-bottom: 20px; }
+  .card { background: #1e1b2e; border: 1px solid var(--c-border); border-radius: 14px; padding: 16px; margin-bottom: 10px; }
+  .panel { background: #1a1730; border: 1px solid var(--c-border2); border-radius: 16px; padding: 18px; margin-bottom: 20px; }
 
   /* Inputs */
   input[type="text"] { width: 100%; background: #151225; border: 1px solid #3b3558; border-radius: 10px; padding: 12px 14px; color: #e2e0ea; font-size: 14px; outline: none; transition: border 0.2s; }
@@ -50,7 +74,7 @@
   .sr-sub { color: #6b6490; font-size: 11px; margin-top: 2px; }
 
   /* Audio player */
-  .player { background: #1a1730; border: 1px solid #302d45; border-radius: 16px; padding: 16px; }
+  .player { background: #1a1730; border: 1px solid var(--c-border); border-radius: 16px; padding: 16px; }
   .player.compact { border-radius: 12px; padding: 12px; }
   .play-btn { width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
   .play-btn.compact { width: 36px; height: 36px; }
@@ -74,9 +98,29 @@
   .top-progress { width: 100%; height: 4px; background: #1e1b2e; border-radius: 4px; margin-bottom: 24px; overflow: hidden; }
   .top-progress-fill { height: 100%; background: linear-gradient(90deg, #f59e0b, #ea580c); border-radius: 4px; transition: width 0.5s; }
 
+  /* History */
+  .history-card { background: #1e1b2e; border: 1px solid var(--c-border); border-radius: 14px; padding: 16px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.2s; }
+  .history-card:hover { border-color: #f59e0b50; }
+  .history-date { color: #6b6490; font-size: 11px; font-weight: 700; }
+  .history-winner { color: #f59e0b; font-weight: 800; font-size: 14px; margin-top: 4px; }
+  .history-players { color: #8b85a8; font-size: 12px; margin-top: 4px; }
+  .history-empty { text-align: center; padding: 60px 20px; }
+  .history-detail { background: #151225; border: 1px solid var(--c-border2); border-radius: 10px; padding: 10px 14px; margin-top: 4px; font-size: 12px; }
+
+  /* Settings */
+  .setting-row { display: flex; justify-content: space-between; align-items: center; background: #1e1b2e; border: 1px solid var(--c-border); border-radius: 14px; padding: 16px; margin-bottom: 10px; }
+  .setting-label { font-weight: 700; font-size: 14px; color: #d4d0e8; }
+  .setting-desc { font-size: 12px; color: #6b6490; margin-top: 2px; }
+  .stepper { display: flex; align-items: center; gap: 12px; }
+  .stepper button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid #3b3558; background: #1a1730; color: #f59e0b; font-size: 18px; font-weight: 900; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .stepper button:active { background: #2a2740; }
+  .stepper span { font-weight: 900; font-size: 18px; color: #fff; min-width: 24px; text-align: center; }
+
   /* Animations */
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
   .loading { animation: pulse 1s infinite; color: #f59e0b; font-size: 12px; margin-top: 8px; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-in { animation: fadeIn 0.3s ease-out; }
 
   /* Scrollbar */
   ::-webkit-scrollbar { width: 4px; }
@@ -84,25 +128,125 @@
   ::-webkit-scrollbar-thumb { background: #3b3558; border-radius: 2px; }
 
   .hidden { display: none !important; }
+
+  /* Toggle switch */
+  .toggle { position: relative; width: 52px; height: 30px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #2a2740; border-radius: 15px; transition: 0.3s; }
+  .toggle-track:before { content: ''; position: absolute; height: 24px; width: 24px; left: 3px; bottom: 3px; background: #6b6490; border-radius: 50%; transition: 0.3s; }
+  .toggle input:checked + .toggle-track { background: #f59e0b; }
+  .toggle input:checked + .toggle-track:before { transform: translateX(22px); background: #fff; }
+
+  /* ═══════ LIGHT THEME ═══════ */
+  body.light {
+    --c-bg: #f4f3f8; --c-text-h: #1a1730; --c-text: #1a1730; --c-text2: #2a2740;
+    --c-muted: #5a5470; --c-muted2: #5a5470; --c-muted3: #6b6580; --c-muted4: #5a5470;
+    --c-dim: #5a5780; --c-surface: #fff; --c-surface2: #fff; --c-surface3: #f0eff5;
+    --c-el: #e8e7ef; --c-border: #d0cfd8; --c-border2: #d0cfd8;
+  }
+  .light #splash { background: #f4f3f8; }
+  .light .splash-title { color: #1a1730; }
+  .light .nav-btn { background: #fff; border-color: var(--c-border); color: var(--c-muted); }
+  .light .nav-btn.active { background: linear-gradient(135deg, #f59e0b, #ea580c); color: #fff; border-color: transparent; }
+  .light .btn-primary:disabled { background: #e8e7ef; color: #888; border-color: #dddce5; }
+  .light .card { background: #fff; border-color: var(--c-border); }
+  .light .panel { background: #fff; border-color: var(--c-border); }
+  .light input[type="text"] { background: #fff; border-color: #c8c7d2; color: #1a1730; }
+  .light input[type="text"]::placeholder { color: #8b85a0; }
+  .light .lbl { color: #5a5470; }
+  .light .ava { background: #e8e7ef; color: #4a4568; }
+  .light .sr:hover, .light .sr:active { background: #f0eff5; }
+  .light .sr-title { color: #1a1730; }
+  .light .sr-sub { color: #5a5470; }
+  .light .player { background: #fff; border-color: var(--c-border); }
+  .light .play-btn:not(.playing) { background: #e8e7ef; }
+  .light .progress-bar { background: #e8e7ef; }
+  .light .guess-btn.active { background: #e8e7ef; color: #1a1730; }
+  .light .guess-btn.active:hover { background: #dddce5; }
+  .light .guess-btn.disabled { background: #f0eff5; color: #a8a4bc; }
+  .light .top-progress { background: #e8e7ef; }
+  .light .result-correct { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.2); }
+  .light .result-wrong { background: rgba(239,68,68,0.06); border-color: rgba(239,68,68,0.15); }
+  .light .history-card { background: #fff; border-color: var(--c-border); }
+  .light .history-detail { background: #f4f3f8; border-color: var(--c-border); color: #2a2740; }
+  .light .setting-row { background: #fff; border-color: var(--c-border); }
+  .light .setting-label { color: #1a1730; }
+  .light .setting-desc { color: #5a5470; }
+  .light .stepper button { background: #f4f3f8; border-color: var(--c-border); }
+  .light .stepper span { color: #1a1730; }
+  .light .toggle-track { background: #e0dfe8; }
+  .light .toggle-track:before { background: #b0adc4; }
 </style>
 </head>
 <body>
 
+<!-- Splash Screen -->
+<div id="splash">
+  <div class="splash-icon">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+  </div>
+  <div class="splash-title">Угадай песню</div>
+  <div class="splash-sub">Музыкальная игра для компании</div>
+  <div class="splash-dots"><span></span><span></span><span></span></div>
+</div>
+
 <div class="container" id="app"></div>
 
 <script>
+// ═══════ SPLASH ═══════
+setTimeout(() => {
+  const splash = document.getElementById('splash');
+  splash.classList.add('hide');
+  setTimeout(() => splash.style.display = 'none', 500);
+}, 1500);
+
 const $ = (s, p) => (p || document).querySelector(s);
 const $$ = (s, p) => [...(p || document).querySelectorAll(s)];
 
+// ═══════ SETTINGS (localStorage) ═══════
+const defaultSettings = { songsPerPlayer: 3, theme: 'dark' };
+function loadSettings() {
+  try { return { ...defaultSettings, ...JSON.parse(localStorage.getItem('gts_settings')) }; } catch { return { ...defaultSettings }; }
+}
+function saveSettings(s) { localStorage.setItem('gts_settings', JSON.stringify(s)); }
+function applyTheme(theme) {
+  if (theme === 'light') document.body.classList.add('light');
+  else document.body.classList.remove('light');
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = theme === 'light' ? '#f4f3f8' : '#f59e0b';
+}
+
+// ═══════ HISTORY (localStorage) ═══════
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem('gts_history')) || []; } catch { return []; }
+}
+function saveHistory(h) { localStorage.setItem('gts_history', JSON.stringify(h)); }
+function addGameToHistory(gameData) {
+  const h = loadHistory();
+  h.unshift(gameData);
+  if (h.length > 50) h.length = 50;
+  saveHistory(h);
+}
+
+// ═══════ STATE ═══════
+let settings = loadSettings();
+applyTheme(settings.theme);
+
 let state = {
   phase: "setup",
+  tab: "game", // "game" | "history" | "settings"
   players: {},
   currentName: "",
-  slots: [null, null, null],
+  slots: [],
   shuffled: [],
   idx: 0,
   guesses: {},
 };
+
+function initSlots() {
+  state.slots = Array(settings.songsPerPlayer).fill(null);
+}
+initSlots();
 
 function getNames() { return Object.keys(state.players); }
 function getTotal() { return Object.values(state.players).flat().length; }
@@ -117,7 +261,6 @@ async function deezerSearch(query) {
       album: t.album?.title || "", cover: t.album?.cover_medium || "", preview: t.preview,
     }));
   } catch {}
-  // JSONP fallback
   try {
     return await new Promise((resolve, reject) => {
       const cb = '_dz_' + Math.random().toString(36).slice(2);
@@ -160,7 +303,7 @@ function createPlayer(src, opts = {}) {
 
   if (!hideTitle && title) {
     const titleEl = document.createElement('p');
-    titleEl.style.cssText = `color:#e2e0ea;font-size:${compact ? 12 : 14}px;font-weight:700;margin:0 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
+    titleEl.style.cssText = `color:var(--c-text);font-size:${compact ? 12 : 14}px;font-weight:700;margin:0 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
     titleEl.textContent = title + (artist ? ` — ${artist}` : '');
     right.appendChild(titleEl);
   }
@@ -176,7 +319,7 @@ function createPlayer(src, opts = {}) {
   bar.appendChild(fill);
 
   const timeEl = document.createElement('span');
-  timeEl.style.cssText = 'color:#6b6490;font-size:11px;font-weight:700;flex-shrink:0;min-width:70px;text-align:right';
+  timeEl.style.cssText = 'color:var(--c-muted);font-size:11px;font-weight:700;flex-shrink:0;min-width:70px;text-align:right';
   timeEl.textContent = '0:00 / 0:00';
 
   progRow.append(bar, timeEl);
@@ -214,26 +357,64 @@ function pauseSvg(s) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 2
 // ═══════ RENDER ═══════
 function render() {
   const app = $('#app');
-  app.innerHTML = '';
-  stopAudio();
 
-  if (state.phase === 'setup') renderSetup(app);
-  else if (state.phase === 'game') renderGame(app);
-  else renderResults(app);
+  // Save audio state during game (so voting doesn't interrupt music)
+  let savedAudioPlaying = false;
+  let savedAudioTime = 0;
+  if (state.phase === 'game' && currentAudio && !currentAudio.paused) {
+    savedAudioPlaying = true;
+    savedAudioTime = currentAudio.currentTime;
+    currentAudio.pause();
+  } else if (state.phase !== 'game') {
+    stopAudio();
+  }
+
+  app.innerHTML = '';
+
+  if (state.phase === 'game') { renderGame(app, savedAudioPlaying, savedAudioTime); return; }
+  if (state.phase === 'results') { renderResults(app); return; }
+
+  // Setup phase — show tabs
+  renderNav(app);
+  if (state.tab === 'history') renderHistory(app);
+  else if (state.tab === 'settings') renderSettings(app);
+  else renderSetup(app);
+}
+
+// ═══════ NAV ═══════
+function renderNav(app) {
+  const nav = document.createElement('div');
+  nav.className = 'bottom-nav';
+  const tabs = [
+    { id: 'game', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>', label: 'Игра' },
+    { id: 'history', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', label: 'История' },
+    { id: 'settings', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>', label: 'Настройки' },
+  ];
+  const hist = loadHistory();
+  tabs.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = `nav-btn${state.tab === t.id ? ' active' : ''}`;
+    btn.innerHTML = t.icon + ' ' + t.label + (t.id === 'history' && hist.length ? ` (${hist.length})` : '');
+    btn.onclick = () => { state.tab = t.id; render(); };
+    nav.appendChild(btn);
+  });
+  app.appendChild(nav);
 }
 
 // ═══════ SETUP ═══════
 function renderSetup(app) {
   const names = getNames();
   const total = getTotal();
+  const div = document.createElement('div');
+  div.className = 'fade-in';
 
-  app.innerHTML = `
+  div.innerHTML = `
     <div style="text-align:center;margin-bottom:36px">
       <div style="display:inline-flex;width:60px;height:60px;border-radius:16px;background:linear-gradient(135deg,#f59e0b,#ea580c);align-items:center;justify-content:center;margin-bottom:12px;box-shadow:0 8px 24px rgba(245,158,11,0.3)">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
       </div>
-      <h1 style="font-size:28px;font-weight:900;color:#fff;margin:8px 0 4px">Угадай песню</h1>
-      <p style="color:#6b6490;font-size:13px">Найдите песню, послушайте превью и угадайте</p>
+      <h1 style="font-size:28px;font-weight:900;color:var(--c-text-h);margin:8px 0 4px">Угадай песню</h1>
+      <p style="color:var(--c-muted);font-size:13px">Игра для компании от 3 человек</p>
     </div>
 
     <div style="margin-bottom:20px">
@@ -242,7 +423,7 @@ function renderSetup(app) {
     </div>
 
     <div id="slotsArea" class="${state.currentName.trim() ? '' : 'hidden'}" style="margin-bottom:20px">
-      <label class="lbl">Песни для «<span id="nameLabel">${state.currentName.trim()}</span>»</label>
+      <label class="lbl">Песни для «<span id="nameLabel">${state.currentName.trim()}</span>» (${settings.songsPerPlayer} шт.)</label>
       <div id="slotsContainer"></div>
       <button class="btn btn-orange" id="addPlayerBtn" disabled>Добавить песни</button>
     </div>
@@ -251,17 +432,18 @@ function renderSetup(app) {
       <div class="panel">
         <div style="display:flex;justify-content:space-between;margin-bottom:12px">
           <span class="lbl">Участники</span>
-          <span style="color:#6b6490;font-size:12px">Песен: ${total}</span>
+          <span style="color:var(--c-muted);font-size:12px">Песен: ${total}</span>
         </div>
         <div id="playersList"></div>
       </div>
     </div>
 
-    <button class="btn btn-primary" id="startBtn" ${total < 2 ? 'disabled' : ''}>
-      ▶ Начать игру
+    <button class="btn btn-primary" id="startBtn" ${names.length < 3 ? 'disabled' : ''}>
+      Начать игру
     </button>
-    ${total > 0 && total < 2 ? '<p style="text-align:center;color:#4a4568;font-size:12px;margin-top:8px">Нужно минимум 2 песни</p>' : ''}
+    ${names.length > 0 && names.length < 3 ? '<p style="text-align:center;color:var(--c-muted3);font-size:12px;margin-top:8px">Нужно минимум 3 участника</p>' : ''}
   `;
+  app.appendChild(div);
 
   // Name input
   const nameInput = $('#nameInput');
@@ -274,18 +456,16 @@ function renderSetup(app) {
     updateAddBtn();
   });
 
-  // Render slots
   renderSlots();
 
-  // Render players list
   const pl = $('#playersList');
   names.forEach(n => {
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;background:#222040;border-radius:10px;padding:10px 14px;margin-bottom:6px';
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;background:var(--c-surface3);border-radius:10px;padding:10px 14px;margin-bottom:6px';
     row.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px">
         <div class="ava">${n[0].toUpperCase()}</div>
-        <span style="font-weight:700;color:#d4d0e8;font-size:14px">${n}</span>
+        <span style="font-weight:700;color:var(--c-text2);font-size:14px">${n}</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span style="color:#f59e0b;font-size:13px;font-weight:700">${state.players[n].length} 🎵</span>
@@ -297,18 +477,16 @@ function renderSetup(app) {
     pl.appendChild(row);
   });
 
-  // Add player button
   $('#addPlayerBtn').onclick = () => {
     const n = state.currentName.trim();
     if (!n || state.players[n] || !state.slots[0]) return;
     state.players[n] = state.slots.filter(Boolean);
-    state.currentName = ''; state.slots = [null, null, null];
+    state.currentName = ''; initSlots();
     render();
   };
 
-  // Start button
   $('#startBtn').onclick = () => {
-    if (total < 2) return;
+    if (names.length < 3) return;
     const all = [];
     for (const [author, songs] of Object.entries(state.players))
       for (const s of songs) all.push({ ...s, author });
@@ -338,9 +516,9 @@ function renderSlots() {
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" style="flex-shrink:0"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            <span style="color:#e2e0ea;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${song.title} — ${song.artist}</span>
+            <span style="color:var(--c-text);font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${song.title} — ${song.artist}</span>
           </div>
-          <button style="background:#2a2740;border:none;border-radius:7px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" data-remove="${i}">
+          <button style="background:var(--c-el);border:none;border-radius:7px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" data-remove="${i}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>`;
@@ -349,7 +527,7 @@ function renderSlots() {
       slot.querySelector('[data-remove]').onclick = () => { state.slots[i] = null; renderSlots(); updateAddBtn(); };
     } else {
       const label = document.createElement('span');
-      label.style.cssText = 'color:#9990b0;font-size:12px;font-weight:700;display:block;margin-bottom:10px';
+      label.style.cssText = 'color:var(--c-muted4);font-size:12px;font-weight:700;display:block;margin-bottom:10px';
       label.textContent = `Песня ${i+1} ${i === 0 ? '(обязательна)' : '(необязат.)'}`;
       slot.appendChild(label);
 
@@ -367,8 +545,8 @@ function renderSlots() {
 
       const doSearch = async () => {
         if (!input.value.trim()) return;
-        btn.innerHTML = '⏳'; btn.disabled = true;
-        resultsDiv.innerHTML = '<p class="loading">⏳ Ищем на Deezer...</p>';
+        btn.innerHTML = '...'; btn.disabled = true;
+        resultsDiv.innerHTML = '<p class="loading">Ищем на Deezer...</p>';
         const data = await deezerSearch(input.value.trim());
         btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Найти`;
         btn.disabled = false;
@@ -406,7 +584,7 @@ function renderSlots() {
 }
 
 // ═══════ GAME ═══════
-function renderGame(app) {
+function renderGame(app, restoreAudio, restoreTime) {
   const names = getNames();
   const cur = state.shuffled[state.idx];
   const allVoted = names.every(n => state.guesses[`${state.idx}-${n}`]);
@@ -417,45 +595,50 @@ function renderGame(app) {
         <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);display:flex;align-items:center;justify-content:center">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
         </div>
-        <span style="font-size:18px;font-weight:900;color:#fff">Раунд ${state.idx + 1}</span>
+        <span style="font-size:18px;font-weight:900;color:var(--c-text-h)">Раунд ${state.idx + 1}</span>
       </div>
-      <div style="background:#1e1b2e;border-radius:20px;padding:6px 16px;font-weight:800;font-size:14px;color:#8b85a8">${state.idx + 1} / ${state.shuffled.length}</div>
+      <div style="background:var(--c-surface);border-radius:20px;padding:6px 16px;font-weight:800;font-size:14px;color:var(--c-muted2)">${state.idx + 1} / ${state.shuffled.length}</div>
     </div>
 
     <div class="top-progress"><div class="top-progress-fill" style="width:${((state.idx+1)/state.shuffled.length)*100}%"></div></div>
 
     <div id="playerArea" style="margin-bottom:24px"></div>
 
-    <p style="text-align:center;color:#6b6490;font-size:12px;margin:-16px 0 20px">🎧 Послушайте и угадайте — чья это песня?</p>
+    <p style="text-align:center;color:var(--c-muted);font-size:12px;margin:-16px 0 20px">Послушайте и угадайте — чья это песня?</p>
 
     <div id="votingArea"></div>
 
     <button class="btn btn-primary" id="nextBtn" ${allVoted ? '' : 'disabled'} style="margin-top:24px">
-      ${state.idx < state.shuffled.length - 1 ? 'Дальше →' : 'Результаты 🏆'}
+      ${state.idx < state.shuffled.length - 1 ? 'Дальше' : 'Результаты'}
     </button>
-    ${!allVoted ? '<p style="text-align:center;color:#4a4568;font-size:12px;margin-top:8px">Ждём выбор от всех</p>' : ''}
+    ${!allVoted ? '<p style="text-align:center;color:var(--c-muted3);font-size:12px;margin-top:8px">Ждём выбор от всех</p>' : ''}
   `;
 
-  // Player
   const playerArea = $('#playerArea');
-  const player = createPlayer(cur.preview, { title: '🎵  Чья это песня?' });
+  const player = createPlayer(cur.preview, { title: 'Чья это песня?' });
   playerArea.appendChild(player);
 
-  // Voting
+  // Restore audio if was playing during vote
+  if (restoreAudio && player._audio) {
+    player._audio.currentTime = restoreTime || 0;
+    currentAudio = player._audio;
+    player._audio.play().catch(() => {});
+  }
+
   const votingArea = $('#votingArea');
   names.forEach(voter => {
     const g = state.guesses[`${state.idx}-${voter}`];
     const panel = document.createElement('div');
-    panel.style.cssText = 'background:#1a1730;border:1px solid #2d2a42;border-radius:14px;padding:16px;margin-bottom:10px';
+    panel.style.cssText = 'background:var(--c-surface2);border:1px solid var(--c-border2);border-radius:14px;padding:16px;margin-bottom:10px';
 
     const header = document.createElement('div');
     header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px';
     header.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px">
         <div class="ava ava-sm">${voter[0].toUpperCase()}</div>
-        <span style="font-weight:800;font-size:14px;color:#d4d0e8">${voter}</span>
+        <span style="font-weight:800;font-size:14px;color:var(--c-text2)">${voter}</span>
       </div>
-      ${g ? `<span style="color:#f59e0b;font-size:12px;font-weight:700;background:#2a2740;padding:4px 12px;border-radius:8px">→ ${g.guessed}</span>` : ''}`;
+      ${g ? `<span style="color:#f59e0b;font-size:12px;font-weight:700;background:var(--c-el);padding:4px 12px;border-radius:8px">${g.guessed}</span>` : ''}`;
 
     const btns = document.createElement('div');
     btns.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
@@ -475,7 +658,6 @@ function renderGame(app) {
     votingArea.appendChild(panel);
   });
 
-  // Next
   $('#nextBtn').onclick = () => {
     if (!allVoted) return;
     stopAudio();
@@ -496,22 +678,34 @@ function renderResults(app) {
   const sorted = Object.entries(sc).sort((a, b) => b[1] - a[1]);
   const top = sorted[0]?.[1] || 0;
 
+  // Save to history
+  const gameRecord = {
+    date: new Date().toISOString(),
+    players: names,
+    scores: sc,
+    winner: sorted[0]?.[0] || '',
+    winnerScore: top,
+    totalSongs: state.shuffled.length,
+    songs: state.shuffled.map(s => ({ title: s.title, artist: s.artist, author: s.author })),
+  };
+  addGameToHistory(gameRecord);
+
   let html = `
-    <div style="text-align:center;margin-bottom:32px">
+    <div style="text-align:center;margin-bottom:32px" class="fade-in">
       <div style="font-size:52px;margin-bottom:8px">🏆</div>
-      <h1 style="font-size:26px;font-weight:900;color:#fff;margin:0 0 4px">Результаты</h1>
-      <p style="color:#6b6490;font-size:13px">Кто лучше знает музыкальные вкусы?</p>
+      <h1 style="font-size:26px;font-weight:900;color:var(--c-text-h);margin:0 0 4px">Результаты</h1>
+      <p style="color:var(--c-muted);font-size:13px">Кто лучше знает музыкальные вкусы?</p>
     </div>
 
     <div class="panel">
       ${sorted.map(([n, s], i) => {
         const w = s === top && top > 0;
-        return `<div style="display:flex;justify-content:space-between;align-items:center;background:${w ? 'rgba(245,158,11,0.1)' : '#222040'};border:${w ? '1px solid rgba(245,158,11,0.25)' : '1px solid transparent'};border-radius:12px;padding:12px 18px;margin-bottom:6px">
+        return `<div style="display:flex;justify-content:space-between;align-items:center;background:${w ? 'rgba(245,158,11,0.1)' : 'var(--c-surface3)'};border:${w ? '1px solid rgba(245,158,11,0.25)' : '1px solid transparent'};border-radius:12px;padding:12px 18px;margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-weight:900;font-size:16px;width:28px;color:${w ? '#f59e0b' : '#4a4568'}">${w ? '👑' : '#'+(i+1)}</span>
-            <span style="font-weight:800;color:${w ? '#fff' : '#8b85a8'}">${n}</span>
+            <span style="font-weight:900;font-size:16px;width:28px;color:${w ? '#f59e0b' : 'var(--c-muted3)'}">${w ? '👑' : '#'+(i+1)}</span>
+            <span style="font-weight:800;color:${w ? 'var(--c-text-h)' : 'var(--c-muted2)'}">${n}</span>
           </div>
-          <div><span style="font-size:24px;font-weight:900;color:${w ? '#f59e0b' : '#4a4568'}">${s}</span><span style="font-size:13px;color:#4a4568;font-weight:700">/${state.shuffled.length}</span></div>
+          <div><span style="font-size:24px;font-weight:900;color:${w ? '#f59e0b' : 'var(--c-muted3)'}">${s}</span><span style="font-size:13px;color:var(--c-muted3);font-weight:700">/${state.shuffled.length}</span></div>
         </div>`;
       }).join('')}
     </div>
@@ -519,21 +713,21 @@ function renderResults(app) {
     <label class="lbl" style="margin-bottom:14px">Все песни</label>
     <div id="songsDetail"></div>
 
-    <button class="btn btn-primary" id="resetBtn" style="margin-top:8px">↺ Начать заново</button>
+    <button class="btn btn-primary" id="resetBtn" style="margin-top:8px">Начать заново</button>
   `;
   app.innerHTML = html;
 
   const detail = $('#songsDetail');
   state.shuffled.forEach((song, si) => {
     const div = document.createElement('div');
-    div.style.cssText = 'background:#1a1730;border:1px solid #2d2a42;border-radius:16px;padding:18px;margin-bottom:12px';
+    div.style.cssText = 'background:var(--c-surface2);border:1px solid var(--c-border2);border-radius:16px;padding:18px;margin-bottom:12px';
 
     let inner = `
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-        <span style="font-weight:800;font-size:14px;color:#d4d0e8">${song.title}</span>
+        <span style="font-weight:800;font-size:14px;color:var(--c-text2)">${song.title}</span>
       </div>
-      ${song.artist ? `<p style="color:#8b85a8;font-size:12px;margin:0 0 2px 19px">${song.artist}</p>` : ''}
+      ${song.artist ? `<p style="color:var(--c-muted2);font-size:12px;margin:0 0 2px 19px">${song.artist}</p>` : ''}
       <p style="color:#f59e0b;font-size:12px;margin:0 0 12px 19px;opacity:0.7">Добавил(а): <b>${song.author}</b></p>
       <div id="songPlayer${si}" style="margin-bottom:12px"></div>`;
 
@@ -541,8 +735,8 @@ function renderResults(app) {
       const g = state.guesses[`${si}-${n}`];
       if (!g) return;
       inner += `<div class="${g.isCorrect ? 'result-correct' : 'result-wrong'}">
-        <span style="font-weight:700;color:#b0adc4">${n}</span>
-        <span style="font-weight:800;color:${g.isCorrect ? '#10b981' : '#ef4444'}">→ ${g.guessed} ${g.isCorrect ? '✓' : '✗'}</span>
+        <span style="font-weight:700;color:var(--c-dim)">${n}</span>
+        <span style="font-weight:800;color:${g.isCorrect ? '#10b981' : '#ef4444'}">${g.guessed} ${g.isCorrect ? '✓' : '✗'}</span>
       </div>`;
     });
 
@@ -555,8 +749,170 @@ function renderResults(app) {
   });
 
   $('#resetBtn').onclick = () => {
-    state = { phase: 'setup', players: {}, currentName: '', slots: [null, null, null], shuffled: [], idx: 0, guesses: {} };
+    state = { phase: 'setup', tab: 'game', players: {}, currentName: '', slots: [], shuffled: [], idx: 0, guesses: {} };
+    initSlots();
     render();
+  };
+}
+
+// ═══════ HISTORY ═══════
+function renderHistory(app) {
+  const history = loadHistory();
+  const div = document.createElement('div');
+  div.className = 'fade-in';
+
+  if (!history.length) {
+    div.innerHTML = `
+      <div class="history-empty">
+        <div style="font-size:48px;margin-bottom:16px;opacity:0.5">📋</div>
+        <p style="font-weight:800;font-size:16px;color:var(--c-muted)">Пока нет сыгранных игр</p>
+        <p style="color:var(--c-muted3);font-size:13px;margin-top:6px">Сыграйте первую партию, и она появится здесь</p>
+      </div>`;
+    app.appendChild(div);
+    return;
+  }
+
+  div.innerHTML = `<label class="lbl" style="margin-bottom:14px">Последние игры (${history.length})</label>`;
+
+  // Stats
+  const totalGames = history.length;
+  const allWinners = {};
+  history.forEach(g => { if (g.winner) allWinners[g.winner] = (allWinners[g.winner] || 0) + 1; });
+  const topPlayer = Object.entries(allWinners).sort((a,b) => b[1] - a[1])[0];
+
+  if (totalGames >= 2 && topPlayer) {
+    const statsDiv = document.createElement('div');
+    statsDiv.className = 'panel';
+    statsDiv.innerHTML = `
+      <label class="lbl">Статистика</label>
+      <div style="display:flex;gap:12px;margin-top:8px">
+        <div style="flex:1;background:var(--c-surface3);border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:24px;font-weight:900;color:#f59e0b">${totalGames}</div>
+          <div style="font-size:11px;color:var(--c-muted);margin-top:2px">Игр сыграно</div>
+        </div>
+        <div style="flex:1;background:var(--c-surface3);border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:16px;font-weight:900;color:#f59e0b">👑 ${topPlayer[0]}</div>
+          <div style="font-size:11px;color:var(--c-muted);margin-top:2px">Побед: ${topPlayer[1]}</div>
+        </div>
+      </div>`;
+    div.appendChild(statsDiv);
+  }
+
+  history.forEach((game, gi) => {
+    const card = document.createElement('div');
+    card.className = 'history-card';
+    const d = new Date(game.date);
+    const dateStr = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const scores = Object.entries(game.scores || {}).sort((a,b) => b[1] - a[1]).map(([n,s]) => `${n}: ${s}`).join(', ');
+
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div class="history-date">${dateStr}</div>
+          <div class="history-winner">👑 ${game.winner} — ${game.winnerScore}/${game.totalSongs}</div>
+          <div class="history-players">${game.players.join(', ')}</div>
+        </div>
+        <button style="background:var(--c-el);border:none;border-radius:7px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" data-del-hist="${gi}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b6490" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      ${scores ? `<div class="history-detail">${scores}</div>` : ''}
+    `;
+    card.querySelector('[data-del-hist]').onclick = (e) => {
+      e.stopPropagation();
+      const h = loadHistory();
+      h.splice(gi, 1);
+      saveHistory(h);
+      render();
+    };
+    div.appendChild(card);
+  });
+
+  // Clear all button
+  if (history.length > 1) {
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'btn';
+    clearBtn.style.cssText = 'background:var(--c-surface);color:#ef4444;border:1px solid var(--c-border);margin-top:12px;font-size:13px';
+    clearBtn.textContent = 'Очистить историю';
+    clearBtn.onclick = () => { saveHistory([]); render(); };
+    div.appendChild(clearBtn);
+  }
+
+  app.appendChild(div);
+}
+
+// ═══════ SETTINGS ═══════
+function renderSettings(app) {
+  const div = document.createElement('div');
+  div.className = 'fade-in';
+
+  div.innerHTML = `
+    <div style="text-align:center;margin-bottom:24px">
+      <h2 style="font-size:22px;font-weight:900;color:var(--c-text-h)">Настройки</h2>
+      <p style="color:var(--c-muted);font-size:13px;margin-top:4px">Параметры игры</p>
+    </div>
+  `;
+
+  // Songs per player
+  const row = document.createElement('div');
+  row.className = 'setting-row';
+  row.innerHTML = `
+    <div>
+      <div class="setting-label">Песен на игрока</div>
+      <div class="setting-desc">Сколько песен добавляет каждый</div>
+    </div>
+    <div class="stepper">
+      <button id="sppMinus">−</button>
+      <span id="sppValue">${settings.songsPerPlayer}</span>
+      <button id="sppPlus">+</button>
+    </div>
+  `;
+  div.appendChild(row);
+
+  // Theme toggle
+  const themeRow = document.createElement('div');
+  themeRow.className = 'setting-row';
+  themeRow.innerHTML = `
+    <div>
+      <div class="setting-label">Светлая тема</div>
+      <div class="setting-desc">Переключить оформление</div>
+    </div>
+    <label class="toggle">
+      <input type="checkbox" id="themeToggle" ${settings.theme === 'light' ? 'checked' : ''}>
+      <span class="toggle-track"></span>
+    </label>
+  `;
+  div.appendChild(themeRow);
+
+  // App version
+  const ver = document.createElement('div');
+  ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
+  ver.innerHTML = `Угадай песню v1.1<br>Музыкальная игра для компании друзей`;
+  div.appendChild(ver);
+
+  app.appendChild(div);
+
+  $('#sppMinus').onclick = () => {
+    if (settings.songsPerPlayer > 1) {
+      settings.songsPerPlayer--;
+      saveSettings(settings);
+      $('#sppValue').textContent = settings.songsPerPlayer;
+      initSlots();
+    }
+  };
+  $('#sppPlus').onclick = () => {
+    if (settings.songsPerPlayer < 5) {
+      settings.songsPerPlayer++;
+      saveSettings(settings);
+      $('#sppValue').textContent = settings.songsPerPlayer;
+      initSlots();
+    }
+  };
+
+  $('#themeToggle').onchange = (e) => {
+    settings.theme = e.target.checked ? 'light' : 'dark';
+    saveSettings(settings);
+    applyTheme(settings.theme);
   };
 }
 
