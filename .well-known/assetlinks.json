@@ -1,8 +1,8 @@
 [{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "com.ivankrey.guessthesong",
-        "sha256_cert_fingerprints": ["88:CE:C8:F6:6D:87:B9:49:4D:B0:35:01:B0:08:77:9E:00:E6:F2:F1:B7:88:22:B7:70:45:A4:A8:55:0D:73:DF"]
-      }
-    }]
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "io.github.ivankrey.guessthesong",
+    "sha256_cert_fingerprints": ["02:2A:1E:D9:FE:B0:E6:C9:82:6D:F9:9C:58:35:0B:77:89:A7:1A:D5:1F:14:2F:40:44:9F:91:D5:8C:02:78:C1"]
+  }
+}]
