@@ -292,7 +292,11 @@ function createPlayer(src, opts = {}) {
 
   const audio = new Audio(src);
   audio.preload = 'auto';
-  if (speed) audio.playbackRate = speed;
+  if (speed) {
+    audio.playbackRate = speed;
+    audio.addEventListener('loadeddata', () => { audio.playbackRate = speed; });
+    audio.addEventListener('canplay', () => { audio.playbackRate = speed; });
+  }
   let playing = false;
 
   const row = document.createElement('div');
@@ -346,7 +350,7 @@ function createPlayer(src, opts = {}) {
 
   playBtn.onclick = () => {
     if (playing) { audio.pause(); }
-    else { stopAudio(); currentAudio = audio; audio.play().catch(() => {}); }
+    else { stopAudio(); currentAudio = audio; if (speed) audio.playbackRate = speed; audio.play().catch(() => {}); }
   };
 
   bar.onclick = (e) => {
