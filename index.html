@@ -127,6 +127,8 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #3b3558; border-radius: 2px; }
 
+  .dur-btn { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-muted2); font-weight: 800; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+  .dur-btn.dur-active { background: #f59e0b; color: #000; border-color: #f59e0b; }
   .hidden { display: none !important; }
 
   /* Toggle switch */
@@ -148,7 +150,8 @@
   .light .splash-title { color: #1a1730; }
   .light .nav-btn { background: #fff; border-color: var(--c-border); color: var(--c-muted); }
   .light .nav-btn.active { background: linear-gradient(135deg, #f59e0b, #ea580c); color: #fff; border-color: transparent; }
-  .light .btn-primary:disabled { background: #e8e7ef; color: #888; border-color: #dddce5; }
+  .light .btn-primary:disabled { background: #d8d7e2; color: #999; border-color: #cccbd5; box-shadow: none; }
+  .light .btn-orange:disabled { background: #d8d7e2; color: #999; border-color: #cccbd5; box-shadow: none; }
   .light .card { background: #fff; border-color: var(--c-border); }
   .light .panel { background: #fff; border-color: var(--c-border); }
   .light input[type="text"] { background: #fff; border-color: #c8c7d2; color: #1a1730; }
@@ -159,7 +162,7 @@
   .light .sr-title { color: #1a1730; }
   .light .sr-sub { color: #5a5470; }
   .light .player { background: #fff; border-color: var(--c-border); }
-  .light .play-btn:not(.playing) { background: #e8e7ef; }
+  .light .play-btn:not(.playing) { background: linear-gradient(135deg, #f59e0b, #ea580c); }
   .light .progress-bar { background: #e8e7ef; }
   .light .guess-btn.active { background: #e8e7ef; color: #1a1730; }
   .light .guess-btn.active:hover { background: #dddce5; }
@@ -204,7 +207,7 @@ const $ = (s, p) => (p || document).querySelector(s);
 const $$ = (s, p) => [...(p || document).querySelectorAll(s)];
 
 // ═══════ SETTINGS (localStorage) ═══════
-const defaultSettings = { songsPerPlayer: 3, theme: 'dark' };
+const defaultSettings = { songsPerPlayer: 3, theme: 'dark', previewDuration: 30, playbackSpeed: 1 };
 function loadSettings() {
   try { return { ...defaultSettings, ...JSON.parse(localStorage.getItem('gts_settings')) }; } catch { return { ...defaultSettings }; }
 }
@@ -283,12 +286,13 @@ function stopAudio() {
 }
 
 function createPlayer(src, opts = {}) {
-  const { compact, hideTitle, title, artist } = opts;
+  const { compact, hideTitle, title, artist, maxDuration, speed } = opts;
   const div = document.createElement('div');
   div.className = `player${compact ? ' compact' : ''}`;
 
   const audio = new Audio(src);
   audio.preload = 'auto';
+  if (speed) audio.playbackRate = speed;
   let playing = false;
 
   const row = document.createElement('div');
@@ -329,9 +333,12 @@ function createPlayer(src, opts = {}) {
 
   const fmt = (s) => isNaN(s) || !s ? '0:00' : `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`;
 
+  const effectiveDuration = () => maxDuration && audio.duration ? Math.min(maxDuration, audio.duration) : audio.duration;
   audio.addEventListener('timeupdate', () => {
-    fill.style.width = audio.duration ? `${(audio.currentTime/audio.duration)*100}%` : '0%';
-    timeEl.textContent = `${fmt(audio.currentTime)} / ${fmt(audio.duration)}`;
+    const dur = effectiveDuration();
+    if (maxDuration && audio.currentTime >= maxDuration) { audio.pause(); audio.currentTime = 0; return; }
+    fill.style.width = dur ? `${(audio.currentTime/dur)*100}%` : '0%';
+    timeEl.textContent = `${fmt(audio.currentTime)} / ${fmt(dur)}`;
   });
   audio.addEventListener('ended', () => { playing = false; playBtn.classList.remove('playing'); playBtn.innerHTML = playSvg(compact ? 16 : 20); fill.style.width = '0%'; });
   audio.addEventListener('play', () => { playing = true; playBtn.classList.add('playing'); playBtn.innerHTML = pauseSvg(compact ? 16 : 20); });
@@ -343,35 +350,28 @@ function createPlayer(src, opts = {}) {
   };
 
   bar.onclick = (e) => {
-    if (!audio.duration) return;
-    audio.currentTime = ((e.clientX - bar.getBoundingClientRect().left) / bar.offsetWidth) * audio.duration;
+    const dur = effectiveDuration();
+    if (!dur) return;
+    audio.currentTime = ((e.clientX - bar.getBoundingClientRect().left) / bar.offsetWidth) * dur;
   };
 
   div._audio = audio;
   return div;
 }
 
-function playSvg(s) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="#c8c4dc" stroke="none"><polygon points="5,3 19,12 5,21"/></svg>`; }
+function playSvg(s) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="5,3 19,12 5,21"/></svg>`; }
 function pauseSvg(s) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="${'#000'}" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>`; }
 
 // ═══════ RENDER ═══════
 function render() {
   const app = $('#app');
 
-  // Save audio state during game (so voting doesn't interrupt music)
-  let savedAudioPlaying = false;
-  let savedAudioTime = 0;
-  if (state.phase === 'game' && currentAudio && !currentAudio.paused) {
-    savedAudioPlaying = true;
-    savedAudioTime = currentAudio.currentTime;
-    currentAudio.pause();
-  } else if (state.phase !== 'game') {
-    stopAudio();
-  }
+  // Stop audio on screen change
+  stopAudio();
 
   app.innerHTML = '';
 
-  if (state.phase === 'game') { renderGame(app, savedAudioPlaying, savedAudioTime); return; }
+  if (state.phase === 'game') { renderGame(app); return; }
   if (state.phase === 'results') { renderResults(app); return; }
 
   // Setup phase — show tabs
@@ -524,7 +524,7 @@ function renderSlots() {
         </div>`;
       const player = createPlayer(song.preview, { compact: true, title: song.title, artist: song.artist });
       slot.appendChild(player);
-      slot.querySelector('[data-remove]').onclick = () => { state.slots[i] = null; renderSlots(); updateAddBtn(); };
+      slot.querySelector('[data-remove]').onclick = () => { stopAudio(); state.slots[i] = null; renderSlots(); updateAddBtn(); };
     } else {
       const label = document.createElement('span');
       label.style.cssText = 'color:var(--c-muted4);font-size:12px;font-weight:700;display:block;margin-bottom:10px';
@@ -584,11 +584,12 @@ function renderSlots() {
 }
 
 // ═══════ GAME ═══════
-function renderGame(app, restoreAudio, restoreTime) {
+function renderGame(app) {
   const names = getNames();
   const cur = state.shuffled[state.idx];
   const allVoted = names.every(n => state.guesses[`${state.idx}-${n}`]);
 
+  // Find current voter (first who hasn't voted yet)
   app.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:10px">
@@ -615,15 +616,8 @@ function renderGame(app, restoreAudio, restoreTime) {
   `;
 
   const playerArea = $('#playerArea');
-  const player = createPlayer(cur.preview, { title: 'Чья это песня?' });
+  const player = createPlayer(cur.preview, { title: 'Чья это песня?', maxDuration: settings.previewDuration < 30 ? settings.previewDuration : 0, speed: settings.playbackSpeed !== 1 ? settings.playbackSpeed : 0 });
   playerArea.appendChild(player);
-
-  // Restore audio if was playing during vote
-  if (restoreAudio && player._audio) {
-    player._audio.currentTime = restoreTime || 0;
-    currentAudio = player._audio;
-    player._audio.play().catch(() => {});
-  }
 
   const votingArea = $('#votingArea');
   names.forEach(voter => {
@@ -638,28 +632,43 @@ function renderGame(app, restoreAudio, restoreTime) {
         <div class="ava ava-sm">${voter[0].toUpperCase()}</div>
         <span style="font-weight:800;font-size:14px;color:var(--c-text2)">${voter}</span>
       </div>
-      ${g ? `<span style="color:#f59e0b;font-size:12px;font-weight:700;background:var(--c-el);padding:4px 12px;border-radius:8px">${g.guessed}</span>` : ''}`;
+      ${g ? '<span style="color:#10b981;font-size:12px;font-weight:700;background:rgba(16,185,129,0.12);padding:4px 12px;border-radius:8px">Голос принят ✓</span>' : ''}`;
 
-    const btns = document.createElement('div');
-    btns.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
-    names.forEach(opt => {
-      const b = document.createElement('button');
-      b.className = `guess-btn ${g ? (g.guessed === opt ? 'selected' : 'disabled') : 'active'}`;
-      b.textContent = opt;
-      b.disabled = !!g;
-      if (!g) b.onclick = () => {
-        state.guesses[`${state.idx}-${voter}`] = { guessed: opt, correct: cur.author, isCorrect: opt === cur.author };
-        render();
-      };
-      btns.appendChild(b);
-    });
+    panel.appendChild(header);
 
-    panel.append(header, btns);
+    if (!g) {
+      const btns = document.createElement('div');
+      btns.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
+      names.forEach(opt => {
+        const b = document.createElement('button');
+        b.className = 'guess-btn active';
+        b.textContent = opt;
+        b.onclick = () => {
+          state.guesses[`${state.idx}-${voter}`] = { guessed: opt, correct: cur.author, isCorrect: opt === cur.author };
+          // Replace buttons with "Голос принят" without full re-render
+          btns.remove();
+          const badge = document.createElement('span');
+          badge.style.cssText = 'color:#10b981;font-size:12px;font-weight:700;background:rgba(16,185,129,0.12);padding:4px 12px;border-radius:8px';
+          badge.textContent = 'Голос принят ✓';
+          header.appendChild(badge);
+          // Enable next button if all voted
+          if (names.every(n => state.guesses[`${state.idx}-${n}`])) {
+            const nextBtn = $('#nextBtn');
+            nextBtn.disabled = false;
+            const hint = nextBtn.nextElementSibling;
+            if (hint) hint.remove();
+          }
+        };
+        btns.appendChild(b);
+      });
+      panel.appendChild(btns);
+    }
+
     votingArea.appendChild(panel);
   });
 
   $('#nextBtn').onclick = () => {
-    if (!allVoted) return;
+    if (!names.every(n => state.guesses[`${state.idx}-${n}`])) return;
     stopAudio();
     if (state.idx < state.shuffled.length - 1) state.idx++;
     else state.phase = 'results';
@@ -869,6 +878,37 @@ function renderSettings(app) {
   `;
   div.appendChild(row);
 
+  // Preview duration
+  const durRow = document.createElement('div');
+  durRow.className = 'setting-row';
+  const durations = [5, 10, 15, 30];
+  durRow.innerHTML = `
+    <div>
+      <div class="setting-label">Длительность отрывка</div>
+      <div class="setting-desc">Сколько секунд играет песня</div>
+    </div>
+    <div style="display:flex;gap:6px">
+      ${durations.map(d => `<button class="dur-btn${settings.previewDuration === d ? ' dur-active' : ''}" data-dur="${d}">${d}с</button>`).join('')}
+    </div>
+  `;
+  div.appendChild(durRow);
+
+  // Playback speed
+  const speedRow = document.createElement('div');
+  speedRow.className = 'setting-row';
+  const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+  const speedLabels = { 0.25: '0.25×', 0.5: '0.5×', 0.75: '0.75×', 1: '1×', 1.25: '1.25×', 1.5: '1.5×', 1.75: '1.75×', 2: '2×' };
+  speedRow.innerHTML = `
+    <div>
+      <div class="setting-label">Скорость воспроизведения</div>
+      <div class="setting-desc">Замедлить или ускорить песню</div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${speeds.map(s => `<button class="dur-btn${settings.playbackSpeed === s ? ' dur-active' : ''}" data-speed="${s}">${speedLabels[s]}</button>`).join('')}
+    </div>
+  `;
+  div.appendChild(speedRow);
+
   // Theme toggle
   const themeRow = document.createElement('div');
   themeRow.className = 'setting-row';
@@ -914,6 +954,24 @@ function renderSettings(app) {
     saveSettings(settings);
     applyTheme(settings.theme);
   };
+
+  $$('[data-dur]').forEach(btn => {
+    btn.onclick = () => {
+      settings.previewDuration = parseInt(btn.dataset.dur);
+      saveSettings(settings);
+      $$('[data-dur]').forEach(b => b.classList.remove('dur-active'));
+      btn.classList.add('dur-active');
+    };
+  });
+
+  $$('[data-speed]').forEach(btn => {
+    btn.onclick = () => {
+      settings.playbackSpeed = parseFloat(btn.dataset.speed);
+      saveSettings(settings);
+      $$('[data-speed]').forEach(b => b.classList.remove('dur-active'));
+      btn.classList.add('dur-active');
+    };
+  });
 }
 
 // Start
