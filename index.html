@@ -308,7 +308,7 @@ function createPlayer(src, opts = {}) {
   if (!hideTitle && title) {
     const titleEl = document.createElement('p');
     titleEl.style.cssText = `color:var(--c-text);font-size:${compact ? 12 : 14}px;font-weight:700;margin:0 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
-    titleEl.textContent = title + (artist ? ` — ${artist}` : '');
+    titleEl.textContent = artist ? `${artist} — ${title}` : title;
     right.appendChild(titleEl);
   }
 
@@ -516,7 +516,7 @@ function renderSlots() {
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" style="flex-shrink:0"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            <span style="color:var(--c-text);font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${song.title} — ${song.artist}</span>
+            <span style="color:var(--c-text);font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${song.artist} — ${song.title}</span>
           </div>
           <button style="background:var(--c-el);border:none;border-radius:7px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" data-remove="${i}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -734,9 +734,8 @@ function renderResults(app) {
     let inner = `
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-        <span style="font-weight:800;font-size:14px;color:var(--c-text2)">${song.title}</span>
+        <span style="font-weight:800;font-size:14px;color:var(--c-text2)">${song.artist ? `${song.artist} — ${song.title}` : song.title}</span>
       </div>
-      ${song.artist ? `<p style="color:var(--c-muted2);font-size:12px;margin:0 0 2px 19px">${song.artist}</p>` : ''}
       <p style="color:#f59e0b;font-size:12px;margin:0 0 12px 19px;opacity:0.7">Добавил(а): <b>${song.author}</b></p>
       <div id="songPlayer${si}" style="margin-bottom:12px"></div>`;
 
