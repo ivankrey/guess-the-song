@@ -17,9 +17,9 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   :root {
-    --c-bg: #110f1f; --c-text-h: #fff; --c-text: #e2e0ea; --c-text2: #d4d0e8;
-    --c-muted: #6b6490; --c-muted2: #8b85a8; --c-muted3: #4a4568; --c-muted4: #9990b0;
-    --c-dim: #b0adc4; --c-surface: #1e1b2e; --c-surface2: #1a1730; --c-surface3: #222040;
+    --c-bg: #110f1f; --c-text-h: #fff; --c-text: #eeecf5; --c-text2: #e0ddf0;
+    --c-muted: #8a84a8; --c-muted2: #a49ec0; --c-muted3: #6a6588; --c-muted4: #b0a8cc;
+    --c-dim: #c8c5d8; --c-surface: #1e1b2e; --c-surface2: #1a1730; --c-surface3: #222040;
     --c-el: #2a2740; --c-border: #302d45; --c-border2: #2d2a42;
   }
   body { font-family: system-ui, -apple-system, sans-serif; background: var(--c-bg); color: var(--c-text); min-height: 100vh; overflow-x: hidden; }
@@ -46,9 +46,9 @@
   /* Buttons */
   .btn { width: 100%; padding: 15px; border-radius: 14px; border: none; font-weight: 900; font-size: 15px; cursor: pointer; text-align: center; transition: all 0.2s; }
   .btn-primary { background: linear-gradient(135deg, #7c3aed, #4f46e5); color: #fff; box-shadow: 0 4px 20px rgba(124,58,237,0.35); }
-  .btn-primary:disabled { background: #1a1730; color: #3d3860; box-shadow: none; border: 1px solid var(--c-border2); cursor: default; }
+  .btn-primary:disabled { background: #1e1b30; color: #7a75a0; box-shadow: none; border: 1px solid #3a3755; cursor: default; }
   .btn-orange { background: linear-gradient(135deg, #f59e0b, #ea580c); color: #000; box-shadow: 0 4px 16px rgba(245,158,11,0.35); }
-  .btn-orange:disabled { background: #1a1730; color: #3d3860; box-shadow: none; border: 1px solid var(--c-border2); cursor: default; }
+  .btn-orange:disabled { background: #1e1b30; color: #7a75a0; box-shadow: none; border: 1px solid #3a3755; cursor: default; }
 
   /* Cards */
   .card { background: #1e1b2e; border: 1px solid var(--c-border); border-radius: 14px; padding: 16px; margin-bottom: 10px; }
@@ -57,7 +57,7 @@
   /* Inputs */
   input[type="text"] { width: 100%; background: #151225; border: 1px solid #3b3558; border-radius: 10px; padding: 12px 14px; color: #e2e0ea; font-size: 14px; outline: none; transition: border 0.2s; }
   input[type="text"]:focus { border-color: #f59e0b80; }
-  input[type="text"]::placeholder { color: #4a456880; }
+  input[type="text"]::placeholder { color: #8580a0; }
 
   /* Label */
   .lbl { color: #8b85a8; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; display: block; }
@@ -896,10 +896,11 @@ function renderSettings(app) {
   // Playback speed
   const speedRow = document.createElement('div');
   speedRow.className = 'setting-row';
+  speedRow.style.cssText = 'flex-direction:column;align-items:stretch';
   const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   const speedLabels = { 0.25: '0.25×', 0.5: '0.5×', 0.75: '0.75×', 1: '1×', 1.25: '1.25×', 1.5: '1.5×', 1.75: '1.75×', 2: '2×' };
   speedRow.innerHTML = `
-    <div>
+    <div style="margin-bottom:12px">
       <div class="setting-label">Скорость воспроизведения</div>
       <div class="setting-desc">Замедлить или ускорить песню</div>
     </div>
