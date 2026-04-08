@@ -1,4 +1,4 @@
-const CACHE_NAME = 'guess-the-song-v2';
+const CACHE_NAME = 'guess-the-song-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -35,11 +35,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // App shell — cache first, then network
+  // HTML и JS — network first (чтобы обновления применялись сразу)
+  const isHtml = event.request.mode === 'navigate'
+    || event.request.destination === 'document'
+    || url.pathname.endsWith('.html')
+    || url.pathname === '/' || url.pathname === '';
+  if (isHtml) {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
+        return response;
+      }).catch(() => caches.match(event.request).then(c => c || new Response('<html><body style="background:#110f1f;color:#fff;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center"><div><h2>Нет подключения</h2><p style="color:#6b6490">Для поиска песен нужен интернет</p></div></body></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } })))
+    );
+    return;
+  }
+
+  // Остальное (иконки, манифест) — cache first
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) {
-        // Update cache in background
         fetch(event.request).then(response => {
           if (response.ok) {
             caches.open(CACHE_NAME).then(cache => cache.put(event.request, response));
@@ -53,11 +70,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
         return response;
-      }).catch(() => {
-        return new Response('<html><body style="background:#110f1f;color:#fff;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center"><div><h2>Нет подключения</h2><p style="color:#6b6490">Для поиска песен нужен интернет</p></div></body></html>', {
-          headers: { 'Content-Type': 'text/html; charset=utf-8' }
-        });
-      });
+      }).catch(() => new Response('', { status: 504 }));
     })
   );
 });

@@ -207,7 +207,7 @@ const $ = (s, p) => (p || document).querySelector(s);
 const $$ = (s, p) => [...(p || document).querySelectorAll(s)];
 
 // ═══════ SETTINGS (localStorage) ═══════
-const defaultSettings = { songsPerPlayer: 3, theme: 'dark', previewDuration: 30, playbackSpeed: 1 };
+const defaultSettings = { songsPerPlayer: 3, theme: 'dark', previewDuration: 30, playbackSpeed: 1, guessSongName: true };
 function loadSettings() {
   try { return { ...defaultSettings, ...JSON.parse(localStorage.getItem('gts_settings')) }; } catch { return { ...defaultSettings }; }
 }
@@ -244,6 +244,8 @@ let state = {
   shuffled: [],
   idx: 0,
   guesses: {},
+  roundPhase: "passing", // "passing" | "voting" | "confirmed" (для режима с угадыванием песни)
+  currentVoterIdx: 0,
 };
 
 function initSlots() {
@@ -260,14 +262,14 @@ async function deezerSearch(query) {
     const r = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=8&output=jsonp&callback=?`);
     const d = await r.json();
     if (d.data?.length) return d.data.filter(t => t.preview).map(t => ({
-      id: t.id, title: t.title_short || t.title, artist: t.artist?.name || "",
+      id: t.id, title: t.title_short || t.title, artist: t.artist?.name || "", artistId: t.artist?.id || null,
       album: t.album?.title || "", cover: t.album?.cover_medium || "", preview: t.preview,
     }));
   } catch {}
   try {
     return await new Promise((resolve, reject) => {
       const cb = '_dz_' + Math.random().toString(36).slice(2);
-      window[cb] = (d) => { delete window[cb]; s.remove(); resolve(d.data?.filter(t => t.preview).map(t => ({ id: t.id, title: t.title_short || t.title, artist: t.artist?.name || "", album: t.album?.title || "", cover: t.album?.cover_medium || "", preview: t.preview })) || []); };
+      window[cb] = (d) => { delete window[cb]; s.remove(); resolve(d.data?.filter(t => t.preview).map(t => ({ id: t.id, title: t.title_short || t.title, artist: t.artist?.name || "", artistId: t.artist?.id || null, album: t.album?.title || "", cover: t.album?.cover_medium || "", preview: t.preview })) || []); };
       const s = document.createElement('script');
       s.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=8&output=jsonp&callback=${cb}`;
       s.onerror = () => { delete window[cb]; reject(); };
@@ -278,11 +280,171 @@ async function deezerSearch(query) {
   return null;
 }
 
+// ═══════ DEEZER JSONP (общий) ═══════
+function dzJsonp(path) {
+  return new Promise((resolve) => {
+    const cb = '_dz_' + Math.random().toString(36).slice(2);
+    let done = false;
+    const s = document.createElement('script');
+    window[cb] = (d) => { if (done) return; done = true; delete window[cb]; s.remove(); resolve(d); };
+    const sep = path.includes('?') ? '&' : '?';
+    s.src = `https://api.deezer.com${path}${sep}output=jsonp&callback=${cb}`;
+    s.onerror = () => { if (done) return; done = true; delete window[cb]; resolve(null); };
+    document.head.appendChild(s);
+    setTimeout(() => { if (!done) { done = true; try { delete window[cb]; } catch {} s.remove(); resolve(null); } }, 8000);
+  });
+}
+
+// ═══════ ГЕНЕРАЦИЯ ВАРИАНТОВ ДЛЯ УГАДЫВАНИЯ ПЕСНИ ═══════
+// Возвращает массив из 6 объектов {title, artist}: 3 от той же группы (включая правильный) + 3 от других групп.
+// Если связанных артистов нет — все 6 из той же группы. Если и этого не хватает — меньше 6.
+async function enrichSongOptions(song) {
+  const correct = { title: song.title, artist: song.artist };
+  song.correctOption = correct;
+
+  const norm = (x) => (x || '').toLowerCase().trim();
+  const key = (o) => norm(o.artist) + '||' + norm(o.title);
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+  const seen = new Set([key(correct)]);
+  const sameArtistPool = [];
+  const otherPool = [];
+  const addTo = (pool, title, artist) => {
+    if (!title || !artist) return;
+    const o = { title, artist };
+    const k = key(o);
+    if (seen.has(k)) return;
+    seen.add(k);
+    pool.push(o);
+  };
+
+  // 1) Топ-треки того же артиста
+  if (song.artistId) {
+    const top = await dzJsonp(`/artist/${song.artistId}/top?limit=50`);
+    if (top?.data) {
+      for (const t of top.data) addTo(sameArtistPool, t.title_short || t.title, song.artist);
+    }
+  }
+  shuffle(sameArtistPool);
+
+  // 2) Связанные артисты → их топ-треки
+  if (song.artistId) {
+    const rel = await dzJsonp(`/artist/${song.artistId}/related?limit=10`);
+    if (rel?.data?.length) {
+      const relArtists = shuffle([...rel.data]).slice(0, 6);
+      for (const ra of relArtists) {
+        if (otherPool.length >= 6) break;
+        const raTop = await dzJsonp(`/artist/${ra.id}/top?limit=5`);
+        if (raTop?.data?.length) {
+          const tracks = shuffle([...raTop.data]);
+          for (const t of tracks) {
+            addTo(otherPool, t.title_short || t.title, ra.name);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // 3) Если вариантов мало — добираем из чарта Deezer (популярные треки)
+  const need = () => (sameArtistPool.length + otherPool.length) < 5;
+  if (need()) {
+    const chart = await dzJsonp('/chart/0/tracks?limit=50');
+    if (chart?.data?.length) {
+      const tracks = shuffle([...chart.data]);
+      for (const t of tracks) {
+        if (!need()) break;
+        addTo(otherPool, t.title_short || t.title, t.artist?.name || '');
+      }
+    }
+  }
+
+  // 4) Поиск по словам названия песни — ищем треки с похожим словом в названии
+  if (need() && song.title) {
+    const words = (song.title || '').split(/\s+/).filter(w => w.length >= 3);
+    for (const w of words) {
+      if (!need()) break;
+      const res = await dzJsonp(`/search?q=${encodeURIComponent(w)}&limit=25`);
+      if (res?.data?.length) {
+        const tracks = shuffle([...res.data]);
+        for (const t of tracks) {
+          if (!need()) break;
+          const tArtist = t.artist?.name || '';
+          const tTitle = t.title_short || t.title;
+          if (norm(tArtist) === norm(song.artist)) {
+            addTo(sameArtistPool, tTitle, tArtist);
+          } else {
+            addTo(otherPool, tTitle, tArtist);
+          }
+        }
+      }
+    }
+  }
+
+  // 5) Финальный фолбэк — поиск по имени артиста
+  if (need() && song.artist) {
+    const s = await dzJsonp(`/search?q=${encodeURIComponent(song.artist)}&limit=30`);
+    if (s?.data?.length) {
+      const tracks = shuffle([...s.data]);
+      for (const t of tracks) {
+        if (!need()) break;
+        const tArtist = t.artist?.name || '';
+        if (norm(tArtist) === norm(song.artist)) {
+          addTo(sameArtistPool, t.title_short || t.title, tArtist);
+        } else {
+          addTo(otherPool, t.title_short || t.title, tArtist);
+        }
+      }
+    }
+  }
+
+  // Сборка финального списка.
+  // Рандомизируем размер кластера того же артиста: 1, 2 или 3 (включая правильный),
+  // чтобы правильный ответ не всегда был в группе из трёх одинаковых.
+  const correctClusterSize = Math.floor(Math.random() * 3) + 1;
+  const sameShuffled = shuffle([...sameArtistPool]);
+  const otherShuffled = shuffle([...otherPool]);
+
+  const result = [correct];
+  // Догоняем кластер правильного артиста до выбранного размера
+  let sameIdx = 0;
+  while (result.length < correctClusterSize && sameIdx < sameShuffled.length) {
+    result.push(sameShuffled[sameIdx++]);
+  }
+  // Заполняем до 6 треками от других артистов (они тоже могут случайно повторяться)
+  let otherIdx = 0;
+  while (result.length < 6 && otherIdx < otherShuffled.length) {
+    result.push(otherShuffled[otherIdx++]);
+  }
+  // Если других не хватило — добираем ещё из того же артиста
+  while (result.length < 6 && sameIdx < sameShuffled.length) {
+    result.push(sameShuffled[sameIdx++]);
+  }
+
+  shuffle(result);
+  song.options = result;
+}
+
 // ═══════ AUDIO MANAGER ═══════
 let currentAudio = null;
+let persistentPlayer = null;
+let persistentPlayerRoundIdx = -1;
 
-function stopAudio() {
-  if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0; }
+function stopAudio(opts = {}) {
+  if (!currentAudio) return;
+  if (opts.preservePersistent && persistentPlayer && currentAudio === persistentPlayer._audio) return;
+  currentAudio.pause();
+  currentAudio.currentTime = 0;
+}
+
+function cleanupPersistentPlayer() {
+  if (persistentPlayer) {
+    const a = persistentPlayer._audio;
+    if (a) { try { a.pause(); a.src = ''; } catch {} }
+    if (persistentPlayer.parentNode) persistentPlayer.parentNode.removeChild(persistentPlayer);
+    persistentPlayer = null;
+    persistentPlayerRoundIdx = -1;
+  }
 }
 
 function createPlayer(src, opts = {}) {
@@ -370,13 +532,33 @@ function pauseSvg(s) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 2
 function render() {
   const app = $('#app');
 
-  // Stop audio on screen change
-  stopAudio();
+  // Stop audio on screen change (но сохраняем постоянный плеер раунда)
+  stopAudio({ preservePersistent: true });
+  // Если ушли из игровой фазы или покинули sequential-режим — убить постоянный плеер
+  if (persistentPlayer && (state.phase !== 'game' || !settings.guessSongName)) {
+    cleanupPersistentPlayer();
+  }
+  // Перед очисткой DOM — отсоединить постоянный плеер, чтобы не потерять его
+  if (persistentPlayer && persistentPlayer.parentNode) {
+    persistentPlayer.parentNode.removeChild(persistentPlayer);
+  }
 
   app.innerHTML = '';
 
   if (state.phase === 'game') { renderGame(app); return; }
-  if (state.phase === 'results') { renderResults(app); return; }
+  if (state.phase === 'results') {
+    try { renderResults(app); }
+    catch (e) {
+      app.innerHTML = `<div class="panel" style="color:#ef4444"><b>Ошибка отображения результатов:</b><br><br>${(e && e.message) || e}<br><br><pre style="white-space:pre-wrap;font-size:11px;color:var(--c-muted)">${(e && e.stack) || ''}</pre></div><button class="btn btn-primary" id="resetBtn" style="margin-top:12px">Начать заново</button>`;
+      $('#resetBtn').onclick = () => {
+        cleanupPersistentPlayer();
+        state = { phase: 'setup', tab: 'game', players: {}, currentName: '', slots: [], shuffled: [], idx: 0, guesses: {}, roundPhase: 'voting', currentVoterIdx: 0 };
+        initSlots();
+        render();
+      };
+    }
+    return;
+  }
 
   // Setup phase — show tabs
   renderNav(app);
@@ -430,6 +612,7 @@ function renderSetup(app) {
       <label class="lbl">Песни для «<span id="nameLabel">${state.currentName.trim()}</span>» (${settings.songsPerPlayer} шт.)</label>
       <div id="slotsContainer"></div>
       <button class="btn btn-orange" id="addPlayerBtn" disabled>Добавить песни</button>
+      <p id="addPlayerHint" style="text-align:center;color:var(--c-muted3);font-size:12px;margin-top:8px;display:none"></p>
     </div>
 
     <div id="playersPanel" class="${names.length ? '' : 'hidden'}">
@@ -489,13 +672,22 @@ function renderSetup(app) {
     render();
   };
 
-  $('#startBtn').onclick = () => {
+  $('#startBtn').onclick = async () => {
     if (names.length < 3) return;
     const all = [];
     for (const [author, songs] of Object.entries(state.players))
       for (const s of songs) all.push({ ...s, author });
     for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
+
+    if (settings.guessSongName) {
+      const btn = $('#startBtn');
+      btn.disabled = true;
+      btn.textContent = 'Готовим варианты...';
+      try { await Promise.all(all.map(s => enrichSongOptions(s))); } catch {}
+    }
+
     state.shuffled = all; state.idx = 0; state.guesses = {}; state.phase = 'game';
+    state.roundPhase = 'passing'; state.currentVoterIdx = 0;
     render();
   };
 }
@@ -504,7 +696,18 @@ function updateAddBtn() {
   const btn = $('#addPlayerBtn');
   if (!btn) return;
   const n = state.currentName.trim();
-  btn.disabled = !(n && state.slots[0] && !state.players[n]);
+  const hasName = !!n;
+  const hasSong = !!state.slots[0];
+  const dup = hasName && !!state.players[n];
+  btn.disabled = !(hasName && hasSong && !dup);
+  const hint = $('#addPlayerHint');
+  if (hint) {
+    let msg = '';
+    if (dup) msg = `Участник «${n}» уже добавлен. Введите другое имя.`;
+    else if (hasName && !hasSong) msg = 'Сначала выберите хотя бы одну песню.';
+    if (msg) { hint.textContent = msg; hint.style.display = 'block'; hint.style.color = dup ? '#ef4444' : 'var(--c-muted3)'; }
+    else { hint.style.display = 'none'; }
+  }
 }
 
 function renderSlots() {
@@ -588,9 +791,25 @@ function renderSlots() {
 }
 
 // ═══════ GAME ═══════
+function renderGameHeader(idx, total) {
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);display:flex;align-items:center;justify-content:center">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </div>
+        <span style="font-size:18px;font-weight:900;color:var(--c-text-h)">Раунд ${idx + 1}</span>
+      </div>
+      <div style="background:var(--c-surface);border-radius:20px;padding:6px 16px;font-weight:800;font-size:14px;color:var(--c-muted2)">${idx + 1} / ${total}</div>
+    </div>
+    <div class="top-progress"><div class="top-progress-fill" style="width:${((idx+1)/total)*100}%"></div></div>
+  `;
+}
+
 function renderGame(app) {
   const names = getNames();
   const cur = state.shuffled[state.idx];
+  if (settings.guessSongName) { renderGameSequential(app, names, cur); return; }
   const allVoted = names.every(n => state.guesses[`${state.idx}-${n}`]);
 
   // Find current voter (first who hasn't voted yet)
@@ -680,16 +899,217 @@ function renderGame(app) {
   };
 }
 
+// ═══════ GAME — последовательный режим (с угадыванием песни) ═══════
+function renderGameSequential(app, names, cur) {
+  const total = state.shuffled.length;
+  const allVoted = names.every(n => state.guesses[`${state.idx}-${n}`]);
+
+  app.innerHTML = renderGameHeader(state.idx, total) + '<div id="persistentPlayerHolder" style="margin-bottom:18px"></div><div id="roundBody"></div>';
+
+  // Постоянный плеер на весь раунд — не останавливается между фазами passing/voting/confirmed
+  if (persistentPlayerRoundIdx !== state.idx) {
+    cleanupPersistentPlayer();
+    persistentPlayer = createPlayer(cur.preview, {
+      title: 'Послушай и угадай',
+      maxDuration: settings.previewDuration < 30 ? settings.previewDuration : 0,
+      speed: settings.playbackSpeed !== 1 ? settings.playbackSpeed : 0,
+    });
+    persistentPlayerRoundIdx = state.idx;
+  }
+  $('#persistentPlayerHolder').appendChild(persistentPlayer);
+
+  const body = $('#roundBody');
+
+  // ─── Фаза подтверждения ответа (показываем до проверки allVoted, чтобы последний голосующий тоже её видел) ───
+  if (state.roundPhase === 'confirmed') {
+    if (state.currentVoterIdx >= names.length) state.currentVoterIdx = names.length - 1;
+    const voter = names[state.currentVoterIdx];
+    // Найти следующего непроголосовавшего
+    let nextIdx = -1;
+    for (let i = 0; i < names.length; i++) {
+      if (!state.guesses[`${state.idx}-${names[i]}`]) { nextIdx = i; break; }
+    }
+    const hasMore = nextIdx !== -1;
+    const nextVoter = hasMore ? names[nextIdx] : null;
+    const isLastRound = state.idx >= total - 1;
+
+    body.innerHTML = `
+      <div class="panel" style="text-align:center;padding:28px 20px">
+        <div style="font-size:44px;margin-bottom:10px">✓</div>
+        <div style="font-size:20px;font-weight:900;color:var(--c-text-h);margin-bottom:4px">Ответ <span style="color:#f59e0b">${voter}</span> принят</div>
+        <div style="color:var(--c-muted);font-size:13px">Голосующий ${state.currentVoterIdx + 1} из ${names.length}</div>
+      </div>
+      <button class="btn btn-primary" id="nextVoterBtn">${hasMore ? `Передать <span style="color:#ffd666">${nextVoter}</span>` : (isLastRound ? 'Результаты' : 'Следующий раунд')}</button>
+      <button class="btn" id="undoBtn" style="background:var(--c-surface);color:var(--c-text2);border:1px solid var(--c-border);margin-top:10px">Изменить ответ</button>
+    `;
+    $('#nextVoterBtn').onclick = () => {
+      if (hasMore) {
+        state.currentVoterIdx = nextIdx;
+        state.roundPhase = 'passing';
+        render();
+      } else {
+        cleanupPersistentPlayer();
+        stopAudio();
+        if (!isLastRound) {
+          state.idx++;
+          state.roundPhase = 'passing';
+          state.currentVoterIdx = 0;
+        } else {
+          state.phase = 'results';
+        }
+        render();
+      }
+    };
+    $('#undoBtn').onclick = () => {
+      delete state.guesses[`${state.idx}-${voter}`];
+      state.roundPhase = 'voting';
+      render();
+    };
+    return;
+  }
+
+  // Все проголосовали (страховка — обычно сюда не попадаем из-за confirmed)
+  if (allVoted) {
+    body.innerHTML = `
+      <div class="panel" style="text-align:center">
+        <div style="font-size:40px;margin-bottom:6px">✅</div>
+        <div style="font-weight:900;font-size:16px;color:var(--c-text-h)">Раунд завершён</div>
+      </div>
+      <button class="btn btn-primary" id="nextRoundBtn">${state.idx < total - 1 ? 'Следующий раунд' : 'Результаты'}</button>
+    `;
+    $('#nextRoundBtn').onclick = () => {
+      cleanupPersistentPlayer();
+      stopAudio();
+      if (state.idx < total - 1) {
+        state.idx++;
+        state.roundPhase = 'passing';
+        state.currentVoterIdx = 0;
+      } else {
+        state.phase = 'results';
+      }
+      render();
+    };
+    return;
+  }
+
+  // Защита от выхода индекса голосующего за пределы
+  if (state.currentVoterIdx >= names.length) state.currentVoterIdx = 0;
+  // Если текущий голосующий уже проголосовал — сдвигаемся на первого непроголосовавшего
+  if (state.guesses[`${state.idx}-${names[state.currentVoterIdx]}`]) {
+    for (let i = 0; i < names.length; i++) {
+      if (!state.guesses[`${state.idx}-${names[i]}`]) { state.currentVoterIdx = i; break; }
+    }
+  }
+
+  const voter = names[state.currentVoterIdx];
+  const voterNum = state.currentVoterIdx + 1;
+  const voterTotal = names.length;
+
+  // «passing» фаза теперь сразу переходит в голосование
+  if (state.roundPhase === 'passing') state.roundPhase = 'voting';
+
+  // ─── Фаза голосования ───
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <div class="ava">${voter[0].toUpperCase()}</div>
+      <div style="min-width:0;flex:1">
+        <div style="font-size:11px;color:var(--c-muted);font-weight:800;letter-spacing:1px;text-transform:uppercase">Ходит</div>
+        <div style="font-size:18px;font-weight:900;color:var(--c-text-h);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${voter}</div>
+      </div>
+      <div style="color:var(--c-muted);font-size:12px;font-weight:700;flex-shrink:0">${voterNum}/${voterTotal}</div>
+    </div>
+
+    <label class="lbl">Чья это песня?</label>
+    <div id="authorBtns" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px"></div>
+
+    <div id="songSection">
+      <label class="lbl">Что это за песня?</label>
+      <div id="songBtns" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
+    </div>
+
+    <button class="btn btn-primary" id="confirmBtn" disabled style="margin-top:18px">Подтвердить ответ</button>
+  `;
+
+  let selAuthor = null;
+  let selSongIdx = null;
+
+  const confirmBtn = $('#confirmBtn');
+  const opts = cur.options || [];
+  const songSection = $('#songSection');
+
+  // Если вариантов нет (Deezer не ответил) — скрыть секцию и требовать только автора
+  if (!opts.length) {
+    songSection.style.display = 'none';
+    selSongIdx = -1; // отметка «не применимо»
+  }
+
+  const updateConfirm = () => {
+    confirmBtn.disabled = !(selAuthor && selSongIdx !== null);
+  };
+
+  const authorBox = $('#authorBtns');
+  names.forEach(opt => {
+    const b = document.createElement('button');
+    b.className = 'guess-btn active';
+    b.textContent = opt;
+    b.onclick = () => {
+      selAuthor = opt;
+      [...authorBox.children].forEach(x => { x.classList.remove('selected'); x.classList.add('active'); });
+      b.classList.remove('active');
+      b.classList.add('selected');
+      updateConfirm();
+    };
+    authorBox.appendChild(b);
+  });
+
+  const songBox = $('#songBtns');
+  opts.forEach((opt, i) => {
+    const b = document.createElement('button');
+    b.className = 'guess-btn active';
+    b.style.cssText = 'text-align:left;padding:12px 14px;width:100%;display:block';
+    b.innerHTML = `<div style="font-weight:800;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${opt.artist}</div><div style="font-size:12px;opacity:0.75;margin-top:2px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${opt.title}</div>`;
+    b.onclick = () => {
+      selSongIdx = i;
+      [...songBox.children].forEach(x => { x.classList.remove('selected'); x.classList.add('active'); });
+      b.classList.remove('active');
+      b.classList.add('selected');
+      updateConfirm();
+    };
+    songBox.appendChild(b);
+  });
+
+  confirmBtn.onclick = () => {
+    const chosenSong = selSongIdx >= 0 ? opts[selSongIdx] : null;
+    const correctSong = cur.correctOption || { title: cur.title, artist: cur.artist };
+    const songCorrect = !!(chosenSong && chosenSong.title === correctSong.title && chosenSong.artist === correctSong.artist);
+    state.guesses[`${state.idx}-${voter}`] = {
+      guessed: selAuthor,
+      correct: cur.author,
+      isCorrect: selAuthor === cur.author,
+      guessedSong: chosenSong,
+      correctSong: correctSong,
+      songCorrect: songCorrect,
+      songModeOn: opts.length > 0,
+    };
+    state.roundPhase = 'confirmed';
+    render();
+  };
+}
+
 // ═══════ RESULTS ═══════
 function renderResults(app) {
   const names = getNames();
   const sc = {}; names.forEach(n => sc[n] = 0);
+  const songModeUsed = Object.values(state.guesses).some(g => g && g.songModeOn);
   for (const [k, v] of Object.entries(state.guesses)) {
     const voter = k.substring(k.indexOf('-') + 1);
-    if (v.isCorrect && voter in sc) sc[voter]++;
+    if (!(voter in sc)) continue;
+    if (v.isCorrect) sc[voter]++;
+    if (v.songCorrect) sc[voter]++;
   }
   const sorted = Object.entries(sc).sort((a, b) => b[1] - a[1]);
   const top = sorted[0]?.[1] || 0;
+  const maxScore = state.shuffled.length * (songModeUsed ? 2 : 1);
 
   // Save to history
   const gameRecord = {
@@ -718,7 +1138,7 @@ function renderResults(app) {
             <span style="font-weight:900;font-size:16px;width:28px;color:${w ? '#f59e0b' : 'var(--c-muted3)'}">${w ? '👑' : '#'+(i+1)}</span>
             <span style="font-weight:800;color:${w ? 'var(--c-text-h)' : 'var(--c-muted2)'}">${n}</span>
           </div>
-          <div><span style="font-size:24px;font-weight:900;color:${w ? '#f59e0b' : 'var(--c-muted3)'}">${s}</span><span style="font-size:13px;color:var(--c-muted3);font-weight:700">/${state.shuffled.length}</span></div>
+          <div><span style="font-size:24px;font-weight:900;color:${w ? '#f59e0b' : 'var(--c-muted3)'}">${s}</span><span style="font-size:13px;color:var(--c-muted3);font-weight:700">/${maxScore}</span></div>
         </div>`;
       }).join('')}
     </div>
@@ -746,9 +1166,24 @@ function renderResults(app) {
     names.forEach(n => {
       const g = state.guesses[`${si}-${n}`];
       if (!g) return;
-      inner += `<div class="${g.isCorrect ? 'result-correct' : 'result-wrong'}">
-        <span style="font-weight:700;color:var(--c-dim)">${n}</span>
-        <span style="font-weight:800;color:${g.isCorrect ? '#10b981' : '#ef4444'}">${g.guessed} ${g.isCorrect ? '✓' : '✗'}</span>
+      const hasSong = g.songModeOn;
+      const bothOk = g.isCorrect && (hasSong ? g.songCorrect : true);
+      const bothBad = !g.isCorrect && (hasSong ? !g.songCorrect : true);
+      const cls = bothOk ? 'result-correct' : (bothBad ? 'result-wrong' : 'result-wrong');
+      const authorMark = g.isCorrect
+        ? `<span style="color:#10b981;font-weight:800">автор ✓</span>`
+        : `<span style="color:#ef4444;font-weight:800">автор ✗</span>`;
+      const songMark = hasSong
+        ? (g.songCorrect
+            ? `<span style="color:#10b981;font-weight:800">песня ✓</span>`
+            : `<span style="color:#ef4444;font-weight:800">песня ✗</span>`)
+        : '';
+      inner += `<div class="${cls}" style="flex-direction:column;align-items:stretch;gap:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:700;color:var(--c-dim)">${n}</span>
+          <span style="display:flex;gap:10px;font-size:12px">${authorMark}${songMark}</span>
+        </div>
+        <div style="font-size:11px;color:var(--c-muted);font-weight:600">Выбрал: ${g.guessed}${hasSong && g.guessedSong ? ` · ${g.guessedSong.artist} — ${g.guessedSong.title}` : ''}</div>
       </div>`;
     });
 
@@ -761,7 +1196,7 @@ function renderResults(app) {
   });
 
   $('#resetBtn').onclick = () => {
-    state = { phase: 'setup', tab: 'game', players: {}, currentName: '', slots: [], shuffled: [], idx: 0, guesses: {} };
+    state = { phase: 'setup', tab: 'game', players: {}, currentName: '', slots: [], shuffled: [], idx: 0, guesses: {}, roundPhase: 'passing', currentVoterIdx: 0 };
     initSlots();
     render();
   };
@@ -865,6 +1300,21 @@ function renderSettings(app) {
     </div>
   `;
 
+  // Guess song name toggle — в самом верху
+  const guessSongRow = document.createElement('div');
+  guessSongRow.className = 'setting-row';
+  guessSongRow.innerHTML = `
+    <div style="min-width:0;flex:1;padding-right:12px">
+      <div class="setting-label">Угадывать исполнителя и название песни</div>
+      <div class="setting-desc">Плюс 1 балл за угаданную песню</div>
+    </div>
+    <label class="toggle">
+      <input type="checkbox" id="guessSongToggle" ${settings.guessSongName ? 'checked' : ''}>
+      <span class="toggle-track"></span>
+    </label>
+  `;
+  div.appendChild(guessSongRow);
+
   // Songs per player
   const row = document.createElement('div');
   row.className = 'setting-row';
@@ -900,8 +1350,8 @@ function renderSettings(app) {
   const speedRow = document.createElement('div');
   speedRow.className = 'setting-row';
   speedRow.style.cssText = 'flex-direction:column;align-items:stretch';
-  const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-  const speedLabels = { 0.25: '0.25×', 0.5: '0.5×', 0.75: '0.75×', 1: '1×', 1.25: '1.25×', 1.5: '1.5×', 1.75: '1.75×', 2: '2×' };
+  const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+  const speedLabels = { 0.5: '0.5×', 0.75: '0.75×', 1: '1×', 1.25: '1.25×', 1.5: '1.5×', 2: '2×' };
   speedRow.innerHTML = `
     <div style="margin-bottom:12px">
       <div class="setting-label">Скорость воспроизведения</div>
@@ -931,7 +1381,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.2<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
@@ -957,6 +1407,11 @@ function renderSettings(app) {
     settings.theme = e.target.checked ? 'light' : 'dark';
     saveSettings(settings);
     applyTheme(settings.theme);
+  };
+
+  $('#guessSongToggle').onchange = (e) => {
+    settings.guessSongName = e.target.checked;
+    saveSettings(settings);
   };
 
   $$('[data-dur]').forEach(btn => {
