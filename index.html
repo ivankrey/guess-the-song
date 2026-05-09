@@ -298,6 +298,10 @@ function dzJsonp(path) {
 // ═══════ ГЕНЕРАЦИЯ ВАРИАНТОВ ДЛЯ УГАДЫВАНИЯ ПЕСНИ ═══════
 // Возвращает массив из 6 объектов {title, artist}: 3 от той же группы (включая правильный) + 3 от других групп.
 // Если связанных артистов нет — все 6 из той же группы. Если и этого не хватает — меньше 6.
+// Список артистов, которые уже использовались в этой игре как обманные кластеры —
+// нужно для того, чтобы не повторять одного и того же «соседа» в разных раундах
+let gameUsedDecoyArtists = new Set();
+
 async function enrichSongOptions(song) {
   const correct = { title: song.title, artist: song.artist };
   song.correctOption = correct;
@@ -386,8 +390,8 @@ async function enrichSongOptions(song) {
           const tracks = shuffle([...raTop.data]);
           if (!decoyClusterArtist) {
             // Первый артист — собираем до 3 треков для обманного кластера
-            // Артист должен совпадать по языку с правильной песней
-            if (matchesLanguage(ra.name, '')) {
+            // Артист должен совпадать по языку с правильной + не быть уже использованным в этой игре
+            if (matchesLanguage(ra.name, '') && !gameUsedDecoyArtists.has(norm(ra.name))) {
               for (const t of tracks) {
                 if (decoyClusterTracks.length >= 3) break;
                 const title = t.title_short || t.title;
@@ -400,7 +404,10 @@ async function enrichSongOptions(song) {
                   otherPool.push(o);
                 }
               }
-              if (decoyClusterTracks.length >= 2) decoyClusterArtist = ra.name;
+              if (decoyClusterTracks.length >= 2) {
+                decoyClusterArtist = ra.name;
+                gameUsedDecoyArtists.add(norm(ra.name));
+              }
             }
           } else {
             // Остальные артисты — по 1 треку
@@ -997,7 +1004,12 @@ function renderSetup(app) {
       const btn = $('#startBtn');
       btn.disabled = true;
       btn.textContent = 'Готовим варианты...';
-      try { await Promise.all(all.map(s => enrichSongOptions(s))); } catch {}
+      // Сбрасываем список «использованных обманок» в начале игры
+      gameUsedDecoyArtists = new Set();
+      // Последовательное обогащение, чтобы избегать повторов одного и того же артиста-обманки
+      for (const s of all) {
+        try { await enrichSongOptions(s); } catch {}
+      }
     }
 
     state.shuffled = all; state.idx = 0; state.guesses = {}; state.phase = 'game';
