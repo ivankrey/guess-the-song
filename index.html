@@ -606,13 +606,16 @@ async function enrichSongOptions(song) {
   }
   const canDiverse = otherUniqueArtists.size >= 5;
 
-  // Если название упоминается в тексте (2+ раз) — мощный буст sameTitle/allSameTitle
+  // Если название упоминается в тексте — буст title-режимов (но баланс «correct в кластере / вне»)
+  // 40% sameTitle (correct в title-кластере) + 40% decoyTitle (cluster чужого title, correct вне)
+  // + 5% allSameTitle + 15% обычное распределение
   let mode = null;
   if (song.titleInLyrics) {
     const hr = Math.random();
-    if (hr < 0.1 && canAllSameTitle) mode = 'allSameTitle';
-    else if (hr < 0.9 && canSameTitle) mode = 'sameTitle';
-    // иначе обычная логика ниже (10% случаев)
+    if (hr < 0.05 && canAllSameTitle) mode = 'allSameTitle';
+    else if (hr < 0.45 && canSameTitle) mode = 'sameTitle';
+    else if (hr < 0.85 && canDecoyTitle) mode = 'decoyTitle';
+    // иначе обычная логика ниже (15% случаев)
   }
 
   // 2% — allSameTitle (редкий), 16% — combo, остальные 5 режимов по ~16.4%
@@ -1816,7 +1819,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.5<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.6<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
