@@ -207,7 +207,7 @@ const $ = (s, p) => (p || document).querySelector(s);
 const $$ = (s, p) => [...(p || document).querySelectorAll(s)];
 
 // ═══════ SETTINGS (localStorage) ═══════
-const defaultSettings = { songsPerPlayer: 3, theme: 'dark', previewDuration: 30, playbackSpeed: 1, guessSongName: true };
+const defaultSettings = { songsPerPlayer: 2, theme: 'dark', previewDuration: 30, playbackSpeed: 1, guessSongName: true };
 function loadSettings() {
   try { return { ...defaultSettings, ...JSON.parse(localStorage.getItem('gts_settings')) }; } catch { return { ...defaultSettings }; }
 }
@@ -1717,7 +1717,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.4<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.2<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
