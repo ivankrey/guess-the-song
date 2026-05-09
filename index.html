@@ -1003,13 +1003,22 @@ function renderSetup(app) {
     if (settings.guessSongName) {
       const btn = $('#startBtn');
       btn.disabled = true;
-      btn.textContent = 'Готовим варианты...';
       // Сбрасываем список «использованных обманок» в начале игры
       gameUsedDecoyArtists = new Set();
-      // Последовательное обогащение, чтобы избегать повторов одного и того же артиста-обманки
-      for (const s of all) {
-        try { await enrichSongOptions(s); } catch {}
+      // Анимированные точки в кнопке
+      let dots = 0;
+      const dotsTimer = setInterval(() => {
+        dots = (dots + 1) % 4;
+        const num = btn._curIdx || 0;
+        btn.textContent = `Готовим ${num}/${all.length}` + '.'.repeat(dots);
+      }, 400);
+      // Последовательное обогащение
+      for (let i = 0; i < all.length; i++) {
+        btn._curIdx = i + 1;
+        btn.textContent = `Готовим ${i + 1}/${all.length}...`;
+        try { await enrichSongOptions(all[i]); } catch {}
       }
+      clearInterval(dotsTimer);
     }
 
     state.shuffled = all; state.idx = 0; state.guesses = {}; state.phase = 'game';
@@ -1445,6 +1454,7 @@ function renderResults(app) {
     winner: sorted[0]?.[0] || '',
     winnerScore: top,
     totalSongs: state.shuffled.length,
+    maxScore: maxScore,
     songs: state.shuffled.map(s => ({ title: s.title, artist: s.artist, author: s.author })),
   };
   addGameToHistory(gameRecord);
@@ -1582,7 +1592,7 @@ function renderHistory(app) {
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <div class="history-date">${dateStr}</div>
-          <div class="history-winner">👑 ${game.winner} — ${game.winnerScore}/${game.totalSongs}</div>
+          <div class="history-winner">👑 ${game.winner} — ${game.winnerScore}/${game.maxScore || game.totalSongs}</div>
           <div class="history-players">${game.players.join(', ')}</div>
         </div>
         <button style="background:var(--c-el);border:none;border-radius:7px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" data-del-hist="${gi}">
@@ -1676,8 +1686,8 @@ function renderSettings(app) {
   const speedRow = document.createElement('div');
   speedRow.className = 'setting-row';
   speedRow.style.cssText = 'flex-direction:column;align-items:stretch';
-  const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
-  const speedLabels = { 0.5: '0.5×', 0.75: '0.75×', 1: '1×', 1.25: '1.25×', 1.5: '1.5×', 2: '2×' };
+  const speeds = [0.75, 1, 1.25, 1.5, 2];
+  const speedLabels = { 0.75: '0.75×', 1: '1×', 1.25: '1.25×', 1.5: '1.5×', 2: '2×' };
   speedRow.innerHTML = `
     <div style="margin-bottom:12px">
       <div class="setting-label">Скорость воспроизведения</div>
@@ -1707,7 +1717,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.4<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
