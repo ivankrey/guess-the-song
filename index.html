@@ -306,11 +306,20 @@ async function enrichSongOptions(song) {
   const key = (o) => norm(o.artist) + '||' + norm(o.title);
   const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
+  // Языковой фильтр: если правильная песня на кириллице — подмешиваем только кириллические треки
+  const hasCyrillic = (s) => /[Ѐ-ӿ]/.test(s || '');
+  const correctIsCyrillic = hasCyrillic(song.artist) || hasCyrillic(song.title);
+  const matchesLanguage = (artist, title) => {
+    if (!correctIsCyrillic) return true; // для англоязычных правильных — фильтр не применяем
+    return hasCyrillic(artist) || hasCyrillic(title);
+  };
+
   const seen = new Set([key(correct)]);
   const sameArtistPool = [];
   const otherPool = [];
   const addTo = (pool, title, artist) => {
     if (!title || !artist) return;
+    if (!matchesLanguage(artist, title)) return;
     const o = { title, artist };
     const k = key(o);
     if (seen.has(k)) return;
@@ -327,24 +336,120 @@ async function enrichSongOptions(song) {
   }
   shuffle(sameArtistPool);
 
-  // 2) Связанные артисты → их топ-треки
-  if (song.artistId) {
-    const rel = await dzJsonp(`/artist/${song.artistId}/related?limit=10`);
-    if (rel?.data?.length) {
-      const relArtists = shuffle([...rel.data]).slice(0, 6);
-      for (const ra of relArtists) {
-        if (otherPool.length >= 6) break;
-        const raTop = await dzJsonp(`/artist/${ra.id}/top?limit=5`);
-        if (raTop?.data?.length) {
-          const tracks = shuffle([...raTop.data]);
-          for (const t of tracks) {
-            addTo(otherPool, t.title_short || t.title, ra.name);
-            break;
+  // 1.5) Поиск треков с таким же названием (точное) и с похожим (частичное совпадение по словам)
+  const sameTitlePool = [];      // точные совпадения названия
+  const similarTitlePool = [];   // частичные — есть общие слова, но название не идентично
+  if (song.title) {
+    const titleNorm = norm(song.title);
+    const correctWords = new Set(titleNorm.split(/\s+/).filter(w => w.length >= 3));
+    const titleSearch = await dzJsonp(`/search?q=${encodeURIComponent(song.title)}&limit=50`);
+    if (titleSearch?.data?.length) {
+      for (const t of titleSearch.data) {
+        const tTitle = t.title_short || t.title;
+        const tArtist = t.artist?.name || '';
+        if (!tArtist || norm(tArtist) === norm(song.artist)) continue;
+        if (!matchesLanguage(tArtist, tTitle)) continue;
+        const tNorm = norm(tTitle);
+        const o = { title: tTitle, artist: tArtist };
+        const k = key(o);
+        if (seen.has(k)) continue;
+        if (tNorm === titleNorm) {
+          seen.add(k);
+          sameTitlePool.push(o);
+        } else if (correctWords.size > 0) {
+          // Считаем пересечение слов
+          const tWords = tNorm.split(/\s+/).filter(w => w.length >= 3);
+          const overlap = tWords.filter(w => correctWords.has(w)).length;
+          if (overlap >= 1) {
+            seen.add(k);
+            similarTitlePool.push(o);
           }
         }
       }
     }
   }
+  shuffle(sameTitlePool);
+  shuffle(similarTitlePool);
+
+  // 2) Связанные артисты → их топ-треки.
+  // Для первого подходящего артиста собираем до 3 треков — кандидат на «обманный кластер».
+  let decoyClusterArtist = null;
+  const decoyClusterTracks = [];
+  if (song.artistId) {
+    const rel = await dzJsonp(`/artist/${song.artistId}/related?limit=10`);
+    if (rel?.data?.length) {
+      const relArtists = shuffle([...rel.data]).slice(0, 8);
+      for (const ra of relArtists) {
+        if (otherPool.length >= 8) break;
+        const raTop = await dzJsonp(`/artist/${ra.id}/top?limit=5`);
+        if (raTop?.data?.length) {
+          const tracks = shuffle([...raTop.data]);
+          if (!decoyClusterArtist) {
+            // Первый артист — собираем до 3 треков для обманного кластера
+            // Артист должен совпадать по языку с правильной песней
+            if (matchesLanguage(ra.name, '')) {
+              for (const t of tracks) {
+                if (decoyClusterTracks.length >= 3) break;
+                const title = t.title_short || t.title;
+                if (!matchesLanguage(ra.name, title)) continue;
+                const o = { title, artist: ra.name };
+                const k = key(o);
+                if (!seen.has(k)) {
+                  seen.add(k);
+                  decoyClusterTracks.push(o);
+                  otherPool.push(o);
+                }
+              }
+              if (decoyClusterTracks.length >= 2) decoyClusterArtist = ra.name;
+            }
+          } else {
+            // Остальные артисты — по 1 треку
+            for (const t of tracks) {
+              addTo(otherPool, t.title_short || t.title, ra.name);
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 2.5) Пул песен с ОБЩИМ названием между собой, но ОТЛИЧНЫМ от правильной
+  // — используется в режиме «правильный НЕ среди песен с одинаковым названием»
+  const decoyTitlePool = [];
+  // Кандидаты на «общий title» — берём из otherPool и sameArtistPool
+  const titleCandidates = shuffle([
+    ...otherPool.slice(0, 8).map(o => o.title),
+    ...sameArtistPool.slice(0, 5).map(o => o.title),
+  ]);
+  for (const candidateTitle of titleCandidates) {
+    if (decoyTitlePool.length >= 3) break;
+    if (!candidateTitle || norm(candidateTitle) === norm(song.title)) continue;
+    const cs = await dzJsonp(`/search?q=${encodeURIComponent(candidateTitle)}&limit=30`);
+    if (!cs?.data?.length) continue;
+    const cNorm = norm(candidateTitle);
+    const tempPool = [];
+    for (const t of cs.data) {
+      const tTitle = t.title_short || t.title;
+      const tArtist = t.artist?.name || '';
+      if (norm(tTitle) === cNorm && norm(tArtist) !== norm(song.artist) && tArtist && matchesLanguage(tArtist, tTitle)) {
+        const o = { title: tTitle, artist: tArtist };
+        const k = key(o);
+        if (!seen.has(k) && !tempPool.some(x => key(x) === k)) {
+          tempPool.push(o);
+        }
+      }
+    }
+    if (tempPool.length >= 2) {
+      // Берём до 3 треков с этим общим названием
+      for (const o of tempPool.slice(0, 3)) {
+        seen.add(key(o));
+        decoyTitlePool.push(o);
+      }
+      break;
+    }
+  }
+  shuffle(decoyTitlePool);
 
   // 3) Если вариантов мало — добираем из чарта Deezer (популярные треки)
   const need = () => (sameArtistPool.length + otherPool.length) < 5;
@@ -398,27 +503,236 @@ async function enrichSongOptions(song) {
     }
   }
 
-  // Сборка финального списка.
-  // Рандомизируем размер кластера того же артиста: 1, 2 или 3 (включая правильный),
-  // чтобы правильный ответ не всегда был в группе из трёх одинаковых.
-  const correctClusterSize = Math.floor(Math.random() * 3) + 1;
+  // Сборка финального списка — 5 режимов по ~20% каждый:
+  // diverse — все 6 разные артисты и разные названия
+  // sameArtist — кластер из 2-3 песен правильного артиста (включая правильную)
+  // sameTitle — кластер с тем же названием, правильный среди них
+  // decoyTitle — кластер с другим общим названием, правильный — отдельно
+  // artistDecoy — кластер из 2-3 песен одного другого артиста
+  // Если выбранный режим недоступен — фолбэк по приоритету
   const sameShuffled = shuffle([...sameArtistPool]);
   const otherShuffled = shuffle([...otherPool]);
+  const result = [];
 
-  const result = [correct];
-  // Догоняем кластер правильного артиста до выбранного размера
-  let sameIdx = 0;
-  while (result.length < correctClusterSize && sameIdx < sameShuffled.length) {
-    result.push(sameShuffled[sameIdx++]);
+  const canSameArtist = sameShuffled.length >= 1;
+  const canSameTitle = (sameTitlePool.length + similarTitlePool.length) >= 2;
+  const canDecoyTitle = decoyTitlePool.length >= 2;
+  const canArtistDecoy = decoyClusterArtist && decoyClusterTracks.length >= 2;
+  const canAllSameTitle = sameTitlePool.length >= 5; // редкий режим — нужно много «тёзок»
+  const _canComboA = sameShuffled.length >= 2 && (sameTitlePool.length + similarTitlePool.length) >= 2;
+  const _canComboB = sameShuffled.length >= 2 && decoyTitlePool.length >= 2;
+  const _canComboC = (sameTitlePool.length + similarTitlePool.length) >= 2 && decoyClusterArtist && decoyClusterTracks.length >= 2;
+  const canCombo = _canComboA || _canComboB || _canComboC;
+  const otherUniqueArtists = new Set();
+  for (const o of otherPool) {
+    if (norm(o.artist) !== norm(song.artist)) otherUniqueArtists.add(norm(o.artist));
   }
-  // Заполняем до 6 треками от других артистов (они тоже могут случайно повторяться)
-  let otherIdx = 0;
-  while (result.length < 6 && otherIdx < otherShuffled.length) {
-    result.push(otherShuffled[otherIdx++]);
+  const canDiverse = otherUniqueArtists.size >= 5;
+
+  // 2% — allSameTitle (редкий), 16% — combo, остальные 5 режимов по ~16.4%
+  const roll = Math.random();
+  let preferredOrder;
+  if (roll < 0.02) {
+    preferredOrder = ['allSameTitle', 'sameTitle', 'decoyTitle', 'combo', 'sameArtist', 'artistDecoy', 'diverse'];
+  } else if (roll < 0.18) {
+    preferredOrder = ['combo', 'sameArtist', 'sameTitle', 'artistDecoy', 'decoyTitle', 'diverse'];
+  } else if (roll < 0.344) {
+    preferredOrder = ['diverse', 'sameArtist', 'artistDecoy', 'sameTitle', 'decoyTitle', 'combo'];
+  } else if (roll < 0.508) {
+    preferredOrder = ['sameArtist', 'artistDecoy', 'combo', 'diverse', 'sameTitle', 'decoyTitle'];
+  } else if (roll < 0.672) {
+    preferredOrder = ['sameTitle', 'decoyTitle', 'combo', 'sameArtist', 'artistDecoy', 'diverse'];
+  } else if (roll < 0.836) {
+    preferredOrder = ['decoyTitle', 'sameTitle', 'combo', 'artistDecoy', 'sameArtist', 'diverse'];
+  } else {
+    preferredOrder = ['artistDecoy', 'sameArtist', 'combo', 'diverse', 'sameTitle', 'decoyTitle'];
   }
-  // Если других не хватило — добираем ещё из того же артиста
-  while (result.length < 6 && sameIdx < sameShuffled.length) {
-    result.push(sameShuffled[sameIdx++]);
+  const canMap = { sameArtist: canSameArtist, sameTitle: canSameTitle, decoyTitle: canDecoyTitle, artistDecoy: canArtistDecoy, diverse: canDiverse, allSameTitle: canAllSameTitle, combo: canCombo };
+  const mode = preferredOrder.find(m => canMap[m]) || 'sameArtist';
+
+  if (mode === 'allSameTitle') {
+    // ВСЕ 6 — песни с одним названием, разные исполнители (правильный среди них)
+    result.push(correct);
+    const decoys = sameTitlePool.slice(0, 5);
+    result.push(...decoys);
+  } else if (mode === 'diverse') {
+    // Все 6 — разные артисты И разные названия. Никаких кластеров.
+    result.push(correct);
+    const usedArtists = new Set([norm(correct.artist)]);
+    const usedTitles = new Set([norm(correct.title)]);
+    const tryAdd = (o) => {
+      if (result.length >= 6) return;
+      const a = norm(o.artist), t = norm(o.title);
+      if (usedArtists.has(a) || usedTitles.has(t)) return;
+      result.push(o);
+      usedArtists.add(a);
+      usedTitles.add(t);
+    };
+    for (const o of otherShuffled) tryAdd(o);
+    for (const o of sameTitlePool) tryAdd(o);
+    for (const o of decoyTitlePool) tryAdd(o);
+    for (const o of sameShuffled) tryAdd(o);
+  } else if (mode === 'combo') {
+    // 3 одинаковых артиста + 3 одинаковых названия. Правильный может быть:
+    //   subA — на пересечении (3 артиста correct + 3 названия correct, +1 наполнитель)
+    //   subB — только в артистическом кластере (3 артиста correct + 3 другого названия)
+    //   subC — только в кластере по названию (3 другого артиста + 3 названия correct)
+    const canSubA = sameShuffled.length >= 2 && (sameTitlePool.length + similarTitlePool.length) >= 2;
+    const canSubB = sameShuffled.length >= 2 && decoyTitlePool.length >= 2;
+    const canSubC = (sameTitlePool.length + similarTitlePool.length) >= 2 && decoyClusterArtist && decoyClusterTracks.length >= 2;
+    const subs = [];
+    if (canSubA) subs.push('A');
+    if (canSubB) subs.push('B');
+    if (canSubC) subs.push('C');
+    const sub = subs[Math.floor(Math.random() * subs.length)] || 'A';
+
+    const pickTitleDecoy = () => {
+      const wantExact = Math.random() < 0.6;
+      if (wantExact && _exactCopy.length > 0) return _exactCopy.shift();
+      if (_similarCopy.length > 0) return _similarCopy.shift();
+      if (_exactCopy.length > 0) return _exactCopy.shift();
+      return null;
+    };
+    let _exactCopy = [...sameTitlePool];
+    let _similarCopy = [...similarTitlePool];
+
+    result.push(correct);
+
+    if (sub === 'A') {
+      // 2 декоя своего артиста + 2 декоя своего названия + 1 наполнитель = 6
+      for (let i = 0; i < 2 && i < sameShuffled.length; i++) result.push(sameShuffled[i]);
+      let added = 0;
+      while (added < 2) {
+        const pick = pickTitleDecoy();
+        if (!pick) break;
+        if (result.some(x => key(x) === key(pick))) continue;
+        result.push(pick); added++;
+      }
+      for (const o of otherShuffled) {
+        if (result.length >= 6) break;
+        if (result.some(x => key(x) === key(o))) continue;
+        result.push(o);
+      }
+    } else if (sub === 'B') {
+      // 2 декоя своего артиста + 3 декоя одного другого названия = 6
+      for (let i = 0; i < 2 && i < sameShuffled.length; i++) result.push(sameShuffled[i]);
+      for (const o of decoyTitlePool.slice(0, 3)) {
+        if (result.length >= 6) break;
+        if (result.some(x => key(x) === key(o))) continue;
+        result.push(o);
+      }
+      for (const o of otherShuffled) {
+        if (result.length >= 6) break;
+        if (result.some(x => key(x) === key(o))) continue;
+        result.push(o);
+      }
+    } else if (sub === 'C') {
+      // 2 декоя своего названия + 3 декоя одного другого артиста = 6
+      let added = 0;
+      while (added < 2) {
+        const pick = pickTitleDecoy();
+        if (!pick) break;
+        if (result.some(x => key(x) === key(pick))) continue;
+        result.push(pick); added++;
+      }
+      for (const o of decoyClusterTracks.slice(0, 3)) {
+        if (result.length >= 6) break;
+        if (result.some(x => key(x) === key(o))) continue;
+        result.push(o);
+      }
+      for (const o of otherShuffled) {
+        if (result.length >= 6) break;
+        if (result.some(x => key(x) === key(o))) continue;
+        result.push(o);
+      }
+    }
+  } else if (mode === 'sameArtist') {
+    // Кластер из 2-3 песен правильного артиста (правильная среди них) + наполнение от других
+    result.push(correct);
+    const clusterSize = Math.min(2 + Math.floor(Math.random() * 2), 1 + sameShuffled.length); // 2 или 3 (включая correct)
+    let si = 0;
+    while (result.length < clusterSize && si < sameShuffled.length) {
+      result.push(sameShuffled[si++]);
+    }
+    for (const o of otherShuffled) {
+      if (result.length >= 6) break;
+      result.push(o);
+    }
+    while (result.length < 6 && si < sameShuffled.length) {
+      result.push(sameShuffled[si++]);
+    }
+  } else if (mode === 'sameTitle') {
+    // Правильный + 1-2 трека с похожим названием (точное совпадение и/или общие слова).
+    // Каждый декой независимо: 60% — точное совпадение, 40% — частичное (если доступно).
+    result.push(correct);
+    const decoySize = Math.min(1 + Math.floor(Math.random() * 2), sameTitlePool.length + similarTitlePool.length);
+    const exactCopy = [...sameTitlePool];
+    const similarCopy = [...similarTitlePool];
+    const decoys = [];
+    for (let i = 0; i < decoySize; i++) {
+      const wantExact = Math.random() < 0.6;
+      if (wantExact && exactCopy.length > 0) {
+        decoys.push(exactCopy.shift());
+      } else if (similarCopy.length > 0) {
+        decoys.push(similarCopy.shift());
+      } else if (exactCopy.length > 0) {
+        decoys.push(exactCopy.shift());
+      }
+    }
+    const decoyKeys = new Set(decoys.map(key));
+    result.push(...decoys);
+    for (const o of otherShuffled) {
+      if (result.length >= 6) break;
+      if (decoyKeys.has(key(o))) continue;
+      result.push(o);
+    }
+    for (const o of sameShuffled) {
+      if (result.length >= 6) break;
+      result.push(o);
+    }
+  } else if (mode === 'decoyTitle') {
+    // Кластер из 2-3 треков с одинаковым названием (НЕ как у правильной), все ложные.
+    // Правильный — отдельная песня среди наполнения.
+    result.push(correct);
+    const decoySize = Math.min(2 + Math.floor(Math.random() * 2), decoyTitlePool.length);
+    const decoys = decoyTitlePool.slice(0, decoySize);
+    const decoyKeys = new Set(decoys.map(key));
+    result.push(...decoys);
+    for (const o of otherShuffled) {
+      if (result.length >= 6) break;
+      if (decoyKeys.has(key(o))) continue;
+      result.push(o);
+    }
+    for (const o of sameShuffled) {
+      if (result.length >= 6) break;
+      result.push(o);
+    }
+  } else if (mode === 'artistDecoy') {
+    // Правильный ответ — единственная песня своего артиста
+    result.push(correct);
+    // Обманный кластер из ДРУГОГО артиста (2-3 трека)
+    const decoySize = Math.min(2 + Math.floor(Math.random() * 2), decoyClusterTracks.length);
+    const decoys = shuffle([...decoyClusterTracks]).slice(0, decoySize);
+    const decoyKeys = new Set(decoys.map(key));
+    result.push(...decoys);
+    for (const o of otherShuffled) {
+      if (result.length >= 6) break;
+      if (decoyKeys.has(key(o))) continue;
+      result.push(o);
+    }
+    for (const o of sameShuffled) {
+      if (result.length >= 6) break;
+      result.push(o);
+    }
+  } else {
+    // Обычный режим: правильный ответ внутри кластера своего артиста (1, 2 или 3 шт)
+    const correctClusterSize = Math.floor(Math.random() * 3) + 1;
+    result.push(correct);
+    let si = 0;
+    while (result.length < correctClusterSize && si < sameShuffled.length) result.push(sameShuffled[si++]);
+    let oi = 0;
+    while (result.length < 6 && oi < otherShuffled.length) result.push(otherShuffled[oi++]);
+    while (result.length < 6 && si < sameShuffled.length) result.push(sameShuffled[si++]);
   }
 
   shuffle(result);
