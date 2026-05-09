@@ -426,7 +426,7 @@ async function enrichSongOptions(song) {
                 if (!seen.has(k)) {
                   seen.add(k);
                   decoyClusterTracks.push(o);
-                  otherPool.push(o);
+                  // ⚠️ В otherPool НЕ добавляем — иначе кластер попадёт в наполнение других режимов
                 }
               }
               if (decoyClusterTracks.length >= 2) {
@@ -543,7 +543,15 @@ async function enrichSongOptions(song) {
   // artistDecoy — кластер из 2-3 песен одного другого артиста
   // Если выбранный режим недоступен — фолбэк по приоритету
   const sameShuffled = shuffle([...sameArtistPool]);
-  const otherShuffled = shuffle([...otherPool]);
+  // otherPool дедуплицируем по артисту — чтобы один артист не давал случайный кластер в наполнении
+  const _otherShuffledRaw = shuffle([...otherPool]);
+  const _seenArtists = new Set();
+  const otherShuffled = _otherShuffledRaw.filter(o => {
+    const a = norm(o.artist);
+    if (_seenArtists.has(a)) return false;
+    _seenArtists.add(a);
+    return true;
+  });
   const result = [];
 
   const canSameArtist = sameShuffled.length >= 1;
