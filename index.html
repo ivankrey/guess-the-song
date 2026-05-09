@@ -583,18 +583,17 @@ async function enrichSongOptions(song) {
 
   let mode = null;
 
-  // Распределение режимов: правильный отдельно от группы должен встречаться чаще,
-  // чтобы не было читерской стратегии «выбирай из группы»
-  // 2% allSameTitle | 14% combo | 16% diverse | 12% sameArtist | 12% sameTitle | 22% decoyTitle | 22% artistDecoy
+  // Распределение режимов: 2% allSameTitle | 10% combo | 16% diverse |
+  // 14% sameArtist | 14% sameTitle | 22% decoyTitle | 22% artistDecoy
   const roll = Math.random();
   let preferredOrder;
   if (roll < 0.02) {
     preferredOrder = ['allSameTitle', 'sameTitle', 'decoyTitle', 'combo', 'sameArtist', 'artistDecoy', 'diverse'];
-  } else if (roll < 0.16) {
+  } else if (roll < 0.12) {
     preferredOrder = ['combo', 'sameArtist', 'sameTitle', 'artistDecoy', 'decoyTitle', 'diverse'];
-  } else if (roll < 0.32) {
+  } else if (roll < 0.28) {
     preferredOrder = ['diverse', 'sameArtist', 'artistDecoy', 'sameTitle', 'decoyTitle', 'combo'];
-  } else if (roll < 0.44) {
+  } else if (roll < 0.42) {
     preferredOrder = ['sameArtist', 'artistDecoy', 'combo', 'diverse', 'sameTitle', 'decoyTitle'];
   } else if (roll < 0.56) {
     preferredOrder = ['sameTitle', 'decoyTitle', 'combo', 'sameArtist', 'artistDecoy', 'diverse'];
@@ -1786,7 +1785,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.8<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.9<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
