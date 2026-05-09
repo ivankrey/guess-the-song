@@ -340,6 +340,11 @@ async function enrichSongOptions(song) {
   }
   shuffle(sameArtistPool);
 
+  // 1.4) Эвристика: короткое название (1-3 значимых слова) скорее всего часть припева
+  // → буст режимов с одинаковым названием
+  const titleWords = (song.title || '').split(/\s+/).filter(w => w.length >= 3);
+  song.titleInLyrics = titleWords.length >= 1 && titleWords.length <= 3;
+
   // 1.5) Поиск треков с таким же названием (точное) и с похожим (частичное совпадение по словам)
   const sameTitlePool = [];      // точные совпадения названия
   const similarTitlePool = [];   // частичные — есть общие слова, но название не идентично
@@ -536,6 +541,15 @@ async function enrichSongOptions(song) {
   }
   const canDiverse = otherUniqueArtists.size >= 5;
 
+  // Если название упоминается в припеве (3+ раз в тексте) — буст sameTitle/allSameTitle
+  let mode = null;
+  if (song.titleInLyrics) {
+    const hr = Math.random();
+    if (hr < 0.1 && canAllSameTitle) mode = 'allSameTitle';
+    else if (hr < 0.6 && canSameTitle) mode = 'sameTitle';
+    // иначе обычная логика ниже (40% случаев)
+  }
+
   // 2% — allSameTitle (редкий), 16% — combo, остальные 5 режимов по ~16.4%
   const roll = Math.random();
   let preferredOrder;
@@ -555,7 +569,7 @@ async function enrichSongOptions(song) {
     preferredOrder = ['artistDecoy', 'sameArtist', 'combo', 'diverse', 'sameTitle', 'decoyTitle'];
   }
   const canMap = { sameArtist: canSameArtist, sameTitle: canSameTitle, decoyTitle: canDecoyTitle, artistDecoy: canArtistDecoy, diverse: canDiverse, allSameTitle: canAllSameTitle, combo: canCombo };
-  const mode = preferredOrder.find(m => canMap[m]) || 'sameArtist';
+  if (!mode) mode = preferredOrder.find(m => canMap[m]) || 'sameArtist';
 
   if (mode === 'allSameTitle') {
     // ВСЕ 6 — песни с одним названием, разные исполнители (правильный среди них)
