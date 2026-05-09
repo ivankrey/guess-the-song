@@ -377,31 +377,6 @@ async function enrichSongOptions(song) {
   }
   shuffle(sameArtistPool);
 
-  // 1.4) Проверка, упоминается ли название в тексте песни (для буста sameTitle режимов)
-  // Эвристика: короткое название (1-3 значимых слова) — вероятно припев
-  const titleWords = (song.title || '').split(/\s+/).filter(w => w.length >= 3);
-  song.titleInLyrics = titleWords.length >= 1 && titleWords.length <= 3;
-  // Точная проверка для нерусских — через lyrics.ovh (русские там не индексируются)
-  if (!correctIsCyrillic) {
-    try {
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 4000);
-      const ly = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(song.artist)}/${encodeURIComponent(song.title)}`, { signal: ctrl.signal });
-      clearTimeout(tid);
-      if (ly.ok) {
-        const lyData = await ly.json();
-        if (lyData.lyrics) {
-          const lyText = lyData.lyrics.toLowerCase();
-          const titleLow = norm(song.title);
-          const escaped = titleLow.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const matches = lyText.match(new RegExp(escaped, 'g'));
-          // Точное значение перебивает эвристику
-          song.titleInLyrics = !!(matches && matches.length >= 2);
-        }
-      }
-    } catch {}
-  }
-
   // 1.5) Поиск треков с таким же названием (точное) и с похожим (частичное совпадение по словам)
   const sameTitlePool = [];      // точные совпадения названия
   const similarTitlePool = [];   // частичные — есть общие слова, но название не идентично
@@ -606,19 +581,9 @@ async function enrichSongOptions(song) {
   }
   const canDiverse = otherUniqueArtists.size >= 5;
 
-  // Если название упоминается в тексте — буст title-режимов (но баланс «correct в кластере / вне»)
-  // 40% sameTitle (correct в title-кластере) + 40% decoyTitle (cluster чужого title, correct вне)
-  // + 5% allSameTitle + 15% обычное распределение
   let mode = null;
-  if (song.titleInLyrics) {
-    const hr = Math.random();
-    if (hr < 0.05 && canAllSameTitle) mode = 'allSameTitle';
-    else if (hr < 0.45 && canSameTitle) mode = 'sameTitle';
-    else if (hr < 0.85 && canDecoyTitle) mode = 'decoyTitle';
-    // иначе обычная логика ниже (15% случаев)
-  }
 
-  // 2% — allSameTitle (редкий), 16% — combo, остальные 5 режимов по ~16.4%
+  // Распределение режимов: 2% allSameTitle, 16% combo, остальные 5 режимов по ~16.4%
   const roll = Math.random();
   let preferredOrder;
   if (roll < 0.02) {
@@ -1819,7 +1784,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.6<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.7<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
