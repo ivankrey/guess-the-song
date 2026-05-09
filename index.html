@@ -302,6 +302,12 @@ function dzJsonp(path) {
 // нужно для того, чтобы не повторять одного и того же «соседа» в разных раундах
 let gameUsedDecoyArtists = new Set();
 
+// Принудительные пары: если в раунде один из этой пары, то другой ОБЯЗАТЕЛЬНО в вариантах
+// Имена в нижнем регистре (для сравнения с norm())
+const FORCED_PAIRS = [
+  ['слот', 'louna'],
+];
+
 async function enrichSongOptions(song) {
   const correct = { title: song.title, artist: song.artist };
   song.correctOption = correct;
@@ -330,6 +336,37 @@ async function enrichSongOptions(song) {
     seen.add(k);
     pool.push(o);
   };
+
+  // 0) Проверка принудительных пар: если correct's артист в FORCED_PAIRS,
+  //    подгружаем треки парного артиста для последующего обязательного включения
+  let pairTracks = [];
+  let pairArtistDisplayName = null;
+  const correctArtistNorm = norm(song.artist);
+  let pairArtistNorm = null;
+  for (const pair of FORCED_PAIRS) {
+    if (pair.includes(correctArtistNorm)) {
+      pairArtistNorm = pair.find(p => p !== correctArtistNorm);
+      break;
+    }
+  }
+  if (pairArtistNorm) {
+    const pairSearch = await dzJsonp(`/search?q=${encodeURIComponent(pairArtistNorm)}&limit=20`);
+    if (pairSearch?.data?.length) {
+      const seenPairTitles = new Set();
+      for (const t of pairSearch.data) {
+        if (pairTracks.length >= 5) break;
+        const tArtist = t.artist?.name || '';
+        if (norm(tArtist) === pairArtistNorm) {
+          const tTitle = t.title_short || t.title;
+          const titleKey = norm(tTitle);
+          if (seenPairTitles.has(titleKey)) continue;
+          seenPairTitles.add(titleKey);
+          pairTracks.push({ title: tTitle, artist: tArtist });
+          pairArtistDisplayName = tArtist;
+        }
+      }
+    }
+  }
 
   // 1) Топ-треки того же артиста
   if (song.artistId) {
@@ -782,6 +819,26 @@ async function enrichSongOptions(song) {
     let oi = 0;
     while (result.length < 6 && oi < otherShuffled.length) result.push(otherShuffled[oi++]);
     while (result.length < 6 && si < sameShuffled.length) result.push(sameShuffled[si++]);
+  }
+
+  // Принудительная пара: если у correct's артиста есть пара (Слот↔Louna и т.п.),
+  // обязательно включаем 1 трек парного артиста в варианты
+  if (pairTracks.length > 0 && pairArtistNorm) {
+    const hasPair = result.some(o => norm(o.artist) === pairArtistNorm);
+    if (!hasPair) {
+      const pickedPair = pairTracks[Math.floor(Math.random() * pairTracks.length)];
+      const correctKey = key(correct);
+      // Заменяем последний не-correct элемент в result
+      let replaced = false;
+      for (let i = result.length - 1; i >= 0; i--) {
+        if (key(result[i]) !== correctKey) {
+          result[i] = pickedPair;
+          replaced = true;
+          break;
+        }
+      }
+      if (!replaced && result.length < 6) result.push(pickedPair);
+    }
   }
 
   shuffle(result);
@@ -1759,7 +1816,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.4<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.5<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
