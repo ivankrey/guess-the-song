@@ -583,20 +583,22 @@ async function enrichSongOptions(song) {
 
   let mode = null;
 
-  // Распределение режимов: 2% allSameTitle, 16% combo, остальные 5 режимов по ~16.4%
+  // Распределение режимов: правильный отдельно от группы должен встречаться чаще,
+  // чтобы не было читерской стратегии «выбирай из группы»
+  // 2% allSameTitle | 14% combo | 16% diverse | 12% sameArtist | 12% sameTitle | 22% decoyTitle | 22% artistDecoy
   const roll = Math.random();
   let preferredOrder;
   if (roll < 0.02) {
     preferredOrder = ['allSameTitle', 'sameTitle', 'decoyTitle', 'combo', 'sameArtist', 'artistDecoy', 'diverse'];
-  } else if (roll < 0.18) {
+  } else if (roll < 0.16) {
     preferredOrder = ['combo', 'sameArtist', 'sameTitle', 'artistDecoy', 'decoyTitle', 'diverse'];
-  } else if (roll < 0.344) {
+  } else if (roll < 0.32) {
     preferredOrder = ['diverse', 'sameArtist', 'artistDecoy', 'sameTitle', 'decoyTitle', 'combo'];
-  } else if (roll < 0.508) {
+  } else if (roll < 0.44) {
     preferredOrder = ['sameArtist', 'artistDecoy', 'combo', 'diverse', 'sameTitle', 'decoyTitle'];
-  } else if (roll < 0.672) {
+  } else if (roll < 0.56) {
     preferredOrder = ['sameTitle', 'decoyTitle', 'combo', 'sameArtist', 'artistDecoy', 'diverse'];
-  } else if (roll < 0.836) {
+  } else if (roll < 0.78) {
     preferredOrder = ['decoyTitle', 'sameTitle', 'combo', 'artistDecoy', 'sameArtist', 'diverse'];
   } else {
     preferredOrder = ['artistDecoy', 'sameArtist', 'combo', 'diverse', 'sameTitle', 'decoyTitle'];
@@ -1784,7 +1786,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.7<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.8<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
