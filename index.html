@@ -921,11 +921,17 @@ function createPlayer(src, opts = {}) {
   playBtn.onclick = () => {
     if (playOnce && playedOnce) return; // уже прослушано — блокируем
     if (playing) { audio.pause(); }
-    else { stopAudio(); currentAudio = audio; if (speed) audio.playbackRate = speed; audio.play().catch(() => {}); }
+    else {
+      // Останавливаем только ДРУГОЙ играющий плеер, не сбрасывая текущий (иначе пауза → начало)
+      if (currentAudio && currentAudio !== audio) stopAudio();
+      currentAudio = audio;
+      if (speed) audio.playbackRate = speed;
+      audio.play().catch(() => {});
+    }
   };
 
   bar.onclick = (e) => {
-    if (playOnce) return; // в режиме «один раз» перемотка отключена (чтобы не переслушивать)
+    if (playOnce && playedOnce) return; // после полного прослушивания перемотка заблокирована
     const dur = effectiveDuration();
     if (!dur) return;
     audio.currentTime = ((e.clientX - bar.getBoundingClientRect().left) / bar.offsetWidth) * dur;
@@ -1831,7 +1837,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.12<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.13<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
