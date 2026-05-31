@@ -893,9 +893,16 @@ function createPlayer(src, opts = {}) {
   const lockAfterPlayOnce = () => {
     if (!playOnce) return;
     playedOnce = true;
+    playBtn.classList.remove('playing');
     playBtn.classList.add('disabled');
-    playBtn.style.opacity = '0.4';
+    // Серая неактивная кнопка
+    playBtn.style.background = 'var(--c-el)';
+    playBtn.style.opacity = '0.5';
     playBtn.style.cursor = 'default';
+    playBtn.style.boxShadow = 'none';
+    // Серая иконка play
+    const s = compact ? 16 : 20;
+    playBtn.innerHTML = `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="#6b6490" stroke="none"><polygon points="5,3 19,12 5,21"/></svg>`;
     bar.style.cursor = 'default';
     if (lockHint) lockHint.style.display = 'block';
   };
@@ -1824,7 +1831,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.11<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.12<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
