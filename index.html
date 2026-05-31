@@ -207,7 +207,7 @@ const $ = (s, p) => (p || document).querySelector(s);
 const $$ = (s, p) => [...(p || document).querySelectorAll(s)];
 
 // ═══════ SETTINGS (localStorage) ═══════
-const defaultSettings = { songsPerPlayer: 2, theme: 'dark', previewDuration: 30, playbackSpeed: 1, guessSongName: true };
+const defaultSettings = { songsPerPlayer: 2, theme: 'dark', previewDuration: 30, playbackSpeed: 1, guessSongName: true, playOnce: false };
 function loadSettings() {
   try { return { ...defaultSettings, ...JSON.parse(localStorage.getItem('gts_settings')) }; } catch { return { ...defaultSettings }; }
 }
@@ -837,9 +837,10 @@ function cleanupPersistentPlayer() {
 }
 
 function createPlayer(src, opts = {}) {
-  const { compact, hideTitle, title, artist, maxDuration, speed } = opts;
+  const { compact, hideTitle, title, artist, maxDuration, speed, playOnce } = opts;
   const div = document.createElement('div');
   div.className = `player${compact ? ' compact' : ''}`;
+  let playedOnce = false; // для режима «прослушать один раз»
 
   const audio = new Audio(src);
   audio.preload = 'auto';
@@ -888,27 +889,49 @@ function createPlayer(src, opts = {}) {
 
   const fmt = (s) => isNaN(s) || !s ? '0:00' : `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`;
 
+  // Помечает плеер как «прослушано» и блокирует повторное воспроизведение
+  const lockAfterPlayOnce = () => {
+    if (!playOnce) return;
+    playedOnce = true;
+    playBtn.classList.add('disabled');
+    playBtn.style.opacity = '0.4';
+    playBtn.style.cursor = 'default';
+    bar.style.cursor = 'default';
+    if (lockHint) lockHint.style.display = 'block';
+  };
+
   const effectiveDuration = () => maxDuration && audio.duration ? Math.min(maxDuration, audio.duration) : audio.duration;
   audio.addEventListener('timeupdate', () => {
     const dur = effectiveDuration();
-    if (maxDuration && audio.currentTime >= maxDuration) { audio.pause(); audio.currentTime = 0; return; }
+    if (maxDuration && audio.currentTime >= maxDuration) { audio.pause(); audio.currentTime = 0; lockAfterPlayOnce(); return; }
     fill.style.width = dur ? `${(audio.currentTime/dur)*100}%` : '0%';
     timeEl.textContent = `${fmt(audio.currentTime)} / ${fmt(dur)}`;
   });
-  audio.addEventListener('ended', () => { playing = false; playBtn.classList.remove('playing'); playBtn.innerHTML = playSvg(compact ? 16 : 20); fill.style.width = '0%'; });
+  audio.addEventListener('ended', () => { playing = false; playBtn.classList.remove('playing'); playBtn.innerHTML = playSvg(compact ? 16 : 20); fill.style.width = '0%'; lockAfterPlayOnce(); });
   audio.addEventListener('play', () => { playing = true; playBtn.classList.add('playing'); playBtn.innerHTML = pauseSvg(compact ? 16 : 20); });
   audio.addEventListener('pause', () => { playing = false; playBtn.classList.remove('playing'); playBtn.innerHTML = playSvg(compact ? 16 : 20); });
 
   playBtn.onclick = () => {
+    if (playOnce && playedOnce) return; // уже прослушано — блокируем
     if (playing) { audio.pause(); }
     else { stopAudio(); currentAudio = audio; if (speed) audio.playbackRate = speed; audio.play().catch(() => {}); }
   };
 
   bar.onclick = (e) => {
+    if (playOnce) return; // в режиме «один раз» перемотка отключена (чтобы не переслушивать)
     const dur = effectiveDuration();
     if (!dur) return;
     audio.currentTime = ((e.clientX - bar.getBoundingClientRect().left) / bar.offsetWidth) * dur;
   };
+
+  // Подсказка про «прослушано» (для playOnce)
+  let lockHint = null;
+  if (playOnce) {
+    lockHint = document.createElement('p');
+    lockHint.style.cssText = 'color:var(--c-muted);font-size:11px;font-weight:700;margin-top:8px;display:none;text-align:center';
+    lockHint.textContent = '🔒 Песня уже прослушана';
+    div.appendChild(lockHint);
+  }
 
   div._audio = audio;
   return div;
@@ -1242,7 +1265,7 @@ function renderGame(app) {
   `;
 
   const playerArea = $('#playerArea');
-  const player = createPlayer(cur.preview, { title: 'Чья это песня?', maxDuration: settings.previewDuration < 30 ? settings.previewDuration : 0, speed: settings.playbackSpeed !== 1 ? settings.playbackSpeed : 0 });
+  const player = createPlayer(cur.preview, { title: 'Чья это песня?', maxDuration: settings.previewDuration < 30 ? settings.previewDuration : 0, speed: settings.playbackSpeed !== 1 ? settings.playbackSpeed : 0, playOnce: settings.playOnce });
   playerArea.appendChild(player);
 
   const votingArea = $('#votingArea');
@@ -1316,6 +1339,7 @@ function renderGameSequential(app, names, cur) {
       title: 'Послушай и угадай',
       maxDuration: settings.previewDuration < 30 ? settings.previewDuration : 0,
       speed: settings.playbackSpeed !== 1 ? settings.playbackSpeed : 0,
+      playOnce: settings.playOnce,
     });
     persistentPlayerRoundIdx = state.idx;
   }
@@ -1719,6 +1743,21 @@ function renderSettings(app) {
   `;
   div.appendChild(guessSongRow);
 
+  // Play once toggle
+  const playOnceRow = document.createElement('div');
+  playOnceRow.className = 'setting-row';
+  playOnceRow.innerHTML = `
+    <div style="min-width:0;flex:1;padding-right:12px">
+      <div class="setting-label">Прослушать только один раз</div>
+      <div class="setting-desc">В каждом раунде песню можно включить лишь раз</div>
+    </div>
+    <label class="toggle">
+      <input type="checkbox" id="playOnceToggle" ${settings.playOnce ? 'checked' : ''}>
+      <span class="toggle-track"></span>
+    </label>
+  `;
+  div.appendChild(playOnceRow);
+
   // Songs per player
   const row = document.createElement('div');
   row.className = 'setting-row';
@@ -1785,7 +1824,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.10<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.11<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
@@ -1815,6 +1854,11 @@ function renderSettings(app) {
 
   $('#guessSongToggle').onchange = (e) => {
     settings.guessSongName = e.target.checked;
+    saveSettings(settings);
+  };
+
+  $('#playOnceToggle').onchange = (e) => {
+    settings.playOnce = e.target.checked;
     saveSettings(settings);
   };
 
