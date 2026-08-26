@@ -10,8 +10,15 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script>
+  // Service Worker УДАЛЁН: игре нужен интернет (Deezer), офлайн-кеш бесполезен,
+  // а SW в median WebView не обновлялся и вызывал белый экран / медленный старт.
+  // Активно чистим старые регистрации и кеши у тех, у кого SW уже стоял.
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js');
+    navigator.serviceWorker.getRegistrations()
+      .then(rs => rs.forEach(r => r.unregister())).catch(() => {});
+  }
+  if (window.caches) {
+    caches.keys().then(ks => ks.forEach(k => caches.delete(k))).catch(() => {});
   }
 </script>
 <style>
@@ -1990,7 +1997,7 @@ function renderSettings(app) {
   div.appendChild(fbBtn);
 
   ver.style.cssText = 'text-align:center;margin-top:24px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.19<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.20<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
