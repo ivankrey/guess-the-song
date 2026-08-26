@@ -232,6 +232,71 @@ function gtsTrack(type, extra) {
 // Заход в игру — один раз при загрузке
 gtsTrack('open');
 
+// ═══════ ФОРМА «СООБЩИТЬ О ПРОБЛЕМЕ» ═══════
+const GTS_FEEDBACK_URL = 'https://roydisstat.ru/gts/feedback';
+function openFeedback() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.2s ease-out';
+  overlay.innerHTML = `
+    <div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:18px;padding:22px;max-width:400px;width:100%">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="font-size:18px;font-weight:900;color:var(--c-text-h)">Сообщить о проблеме</h3>
+        <button id="fbClose" style="background:none;border:none;cursor:pointer;padding:4px;line-height:0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--c-muted)" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <label class="lbl">Ваш email (для ответа)</label>
+      <input type="text" id="fbEmail" placeholder="you@example.com" style="margin-bottom:14px">
+      <label class="lbl">Опишите проблему</label>
+      <textarea id="fbMsg" placeholder="Что случилось?" style="width:100%;min-height:110px;background:#151225;border:1px solid #3b3558;border-radius:10px;padding:12px 14px;color:#e2e0ea;font-size:14px;outline:none;resize:vertical;font-family:inherit"></textarea>
+      <div id="fbStatus" style="font-size:13px;margin-top:10px;min-height:18px"></div>
+      <button class="btn btn-primary" id="fbSend" style="margin-top:8px">Отправить</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) close(); };
+  $('#fbClose', overlay).onclick = close;
+
+  // светлая тема для textarea
+  if (document.body.classList.contains('light')) {
+    const ta = $('#fbMsg', overlay);
+    ta.style.background = '#fff'; ta.style.borderColor = '#c8c7d2'; ta.style.color = '#1a1730';
+  }
+
+  $('#fbSend', overlay).onclick = async () => {
+    const email = $('#fbEmail', overlay).value.trim();
+    const message = $('#fbMsg', overlay).value.trim();
+    const status = $('#fbStatus', overlay);
+    if (!message) { status.style.color = '#ef4444'; status.textContent = 'Напишите, что случилось.'; return; }
+    const btn = $('#fbSend', overlay);
+    btn.disabled = true; btn.textContent = 'Отправляем...';
+    status.textContent = '';
+    try {
+      const r = await fetch(GTS_FEEDBACK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, message, device: gtsDeviceId() }),
+      });
+      if (r.ok) {
+        overlay.querySelector('div').innerHTML = `<div style="text-align:center;padding:20px 0">
+          <div style="font-size:44px;margin-bottom:10px">✅</div>
+          <div style="font-size:17px;font-weight:900;color:var(--c-text-h);margin-bottom:6px">Спасибо!</div>
+          <div style="color:var(--c-muted);font-size:13px">Сообщение отправлено. Мы свяжемся с вами${email ? ' по указанной почте' : ''}.</div>
+          <button class="btn btn-primary" id="fbOk" style="margin-top:18px">Закрыть</button>
+        </div>`;
+        $('#fbOk', overlay).onclick = close;
+      } else {
+        status.style.color = '#ef4444'; status.textContent = 'Не удалось отправить. Попробуйте позже.';
+        btn.disabled = false; btn.textContent = 'Отправить';
+      }
+    } catch {
+      status.style.color = '#ef4444'; status.textContent = 'Нет связи. Проверьте интернет.';
+      btn.disabled = false; btn.textContent = 'Отправить';
+    }
+  };
+}
+
 // ═══════ SETTINGS (localStorage) ═══════
 const defaultSettings = { songsPerPlayer: 2, theme: 'dark', previewDuration: 30, playbackSpeed: 1, guessSongName: true, playOnce: false };
 function loadSettings() {
@@ -1915,8 +1980,16 @@ function renderSettings(app) {
 
   // App version
   const ver = document.createElement('div');
-  ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.16<br>Музыкальная игра для компании друзей`;
+  // Кнопка «Сообщить о проблеме»
+  const fbBtn = document.createElement('button');
+  fbBtn.className = 'btn';
+  fbBtn.style.cssText = 'background:var(--c-surface);color:var(--c-text2);border:1px solid var(--c-border);margin-top:24px;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px';
+  fbBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Сообщить о проблеме`;
+  fbBtn.onclick = openFeedback;
+  div.appendChild(fbBtn);
+
+  ver.style.cssText = 'text-align:center;margin-top:24px;color:var(--c-muted3);font-size:12px';
+  ver.innerHTML = `Угадай песню v1.3.17<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
