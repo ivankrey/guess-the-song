@@ -229,8 +229,9 @@ function gtsTrack(type, extra) {
     }
   } catch {}
 }
-// Заход в игру — один раз при загрузке
-gtsTrack('open');
+// Заход в игру — после полной загрузки (на top-level sendBeacon в WebView терялся)
+if (document.readyState === 'complete') gtsTrack('open');
+else window.addEventListener('load', () => gtsTrack('open'));
 
 // ═══════ ФОРМА «СООБЩИТЬ О ПРОБЛЕМЕ» ═══════
 const GTS_FEEDBACK_URL = 'https://roydisstat.ru/gts/feedback';
@@ -1989,7 +1990,7 @@ function renderSettings(app) {
   div.appendChild(fbBtn);
 
   ver.style.cssText = 'text-align:center;margin-top:24px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.18<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.19<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
