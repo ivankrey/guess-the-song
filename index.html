@@ -206,6 +206,32 @@ setTimeout(() => {
 const $ = (s, p) => (p || document).querySelector(s);
 const $$ = (s, p) => [...(p || document).querySelectorAll(s)];
 
+// ═══════ АНАЛИТИКА (свой счётчик на сервере) ═══════
+const GTS_TRACK_URL = 'https://roydisstat.ru/gts/track';
+function gtsDeviceId() {
+  try {
+    let id = localStorage.getItem('gts_device_id');
+    if (!id) {
+      id = (crypto.randomUUID ? crypto.randomUUID() : 'd' + Date.now() + Math.random().toString(36).slice(2));
+      localStorage.setItem('gts_device_id', id);
+    }
+    return id;
+  } catch { return null; }
+}
+function gtsTrack(type, extra) {
+  try {
+    const payload = JSON.stringify({ type, device: gtsDeviceId(), ...extra });
+    // sendBeacon надёжнее (не блокирует, доходит даже при закрытии), fallback на fetch
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(GTS_TRACK_URL, new Blob([payload], { type: 'application/json' }));
+    } else {
+      fetch(GTS_TRACK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
+    }
+  } catch {}
+}
+// Заход в игру — один раз при загрузке
+gtsTrack('open');
+
 // ═══════ SETTINGS (localStorage) ═══════
 const defaultSettings = { songsPerPlayer: 2, theme: 'dark', previewDuration: 30, playbackSpeed: 1, guessSongName: true, playOnce: false };
 function loadSettings() {
@@ -1127,6 +1153,7 @@ function renderSetup(app) {
 
     state.shuffled = all; state.idx = 0; state.guesses = {}; state.phase = 'game';
     state.roundPhase = 'passing'; state.currentVoterIdx = 0;
+    gtsTrack('game_start', { players: names.length }); // аналитика: начата партия
     render();
   };
 }
@@ -1837,7 +1864,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.13<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.14<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
