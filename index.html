@@ -221,11 +221,11 @@ function gtsDeviceId() {
 function gtsTrack(type, extra) {
   try {
     const payload = JSON.stringify({ type, device: gtsDeviceId(), ...extra });
-    // sendBeacon надёжнее (не блокирует, доходит даже при закрытии), fallback на fetch
+    // text/plain — «простой» запрос без CORS preflight (сервер парсит JSON независимо от типа)
     if (navigator.sendBeacon) {
-      navigator.sendBeacon(GTS_TRACK_URL, new Blob([payload], { type: 'application/json' }));
+      navigator.sendBeacon(GTS_TRACK_URL, new Blob([payload], { type: 'text/plain' }));
     } else {
-      fetch(GTS_TRACK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
+      fetch(GTS_TRACK_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: payload, keepalive: true, mode: 'no-cors' }).catch(() => {});
     }
   } catch {}
 }
@@ -1989,7 +1989,7 @@ function renderSettings(app) {
   div.appendChild(fbBtn);
 
   ver.style.cssText = 'text-align:center;margin-top:24px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.17<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.18<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
