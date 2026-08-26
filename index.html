@@ -1153,7 +1153,17 @@ function renderSetup(app) {
 
     state.shuffled = all; state.idx = 0; state.guesses = {}; state.phase = 'game';
     state.roundPhase = 'passing'; state.currentVoterIdx = 0;
-    gtsTrack('game_start', { players: names.length }); // аналитика: начата партия
+    // аналитика: начата партия + настройки
+    state._finishTracked = false;
+    gtsTrack('game_start', {
+      players: names.length,
+      gsn: settings.guessSongName ? 1 : 0,       // режим угадывания песни
+      po: settings.playOnce ? 1 : 0,             // прослушать один раз
+      dur: settings.previewDuration,             // длительность отрывка
+      spp: settings.songsPerPlayer,              // песен на игрока
+      spd: settings.playbackSpeed,               // скорость
+      songs: all.length,                         // всего песен в партии
+    });
     render();
   };
 }
@@ -1566,6 +1576,11 @@ function renderGameSequential(app, names, cur) {
 // ═══════ RESULTS ═══════
 function renderResults(app) {
   const names = getNames();
+  // аналитика: партия доиграна до результатов (один раз)
+  if (!state._finishTracked) {
+    state._finishTracked = true;
+    gtsTrack('game_finish', { players: names.length, songs: state.shuffled.length });
+  }
   const sc = {}; names.forEach(n => sc[n] = 0);
   const songModeUsed = Object.values(state.guesses).some(g => g && g.songModeOn);
   for (const [k, v] of Object.entries(state.guesses)) {
@@ -1864,7 +1879,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.14<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.15<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
