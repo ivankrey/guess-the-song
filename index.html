@@ -862,14 +862,40 @@ function cleanupPersistentPlayer() {
   }
 }
 
+// Обновляет preview-ссылку трека свежим токеном (Deezer-токены живут ~15 мин)
+async function refreshPreview(trackId) {
+  if (!trackId) return null;
+  try {
+    const d = await dzJsonp(`/track/${trackId}`);
+    return d && d.preview ? d.preview : null;
+  } catch { return null; }
+}
+
 function createPlayer(src, opts = {}) {
-  const { compact, hideTitle, title, artist, maxDuration, speed, playOnce } = opts;
+  const { compact, hideTitle, title, artist, maxDuration, speed, playOnce, trackId } = opts;
   const div = document.createElement('div');
   div.className = `player${compact ? ' compact' : ''}`;
   let playedOnce = false; // для режима «прослушать один раз»
+  let refreshTried = false; // защита от бесконечного refresh
 
   const audio = new Audio(src);
   audio.preload = 'auto';
+
+  // Если mp3 не загрузился (истёк токен превью) — обновляем ссылку и пробуем снова
+  audio.addEventListener('error', async () => {
+    if (refreshTried || !trackId) return;
+    refreshTried = true;
+    const wantPlay = !audio.paused || audio._wantPlay;
+    const fresh = await refreshPreview(trackId);
+    if (fresh) {
+      audio.src = fresh;
+      audio.load();
+      if (wantPlay) {
+        if (speed) audio.playbackRate = speed;
+        audio.play().catch(() => {});
+      }
+    }
+  });
   if (speed) {
     audio.playbackRate = speed;
     audio.addEventListener('loadeddata', () => { audio.playbackRate = speed; });
@@ -946,11 +972,12 @@ function createPlayer(src, opts = {}) {
 
   playBtn.onclick = () => {
     if (playOnce && playedOnce) return; // уже прослушано — блокируем
-    if (playing) { audio.pause(); }
+    if (playing) { audio.pause(); audio._wantPlay = false; }
     else {
       // Останавливаем только ДРУГОЙ играющий плеер, не сбрасывая текущий (иначе пауза → начало)
       if (currentAudio && currentAudio !== audio) stopAudio();
       currentAudio = audio;
+      audio._wantPlay = true; // на случай refresh токена в error-обработчике
       if (speed) audio.playbackRate = speed;
       audio.play().catch(() => {});
     }
@@ -1151,6 +1178,15 @@ function renderSetup(app) {
       clearInterval(dotsTimer);
     }
 
+    // Обновляем preview-ссылки свежими токенами (Deezer-токены живут ~15 мин)
+    try {
+      await Promise.all(all.map(async (s) => {
+        if (!s.id) return;
+        const fresh = await refreshPreview(s.id);
+        if (fresh) s.preview = fresh;
+      }));
+    } catch {}
+
     state.shuffled = all; state.idx = 0; state.guesses = {}; state.phase = 'game';
     state.roundPhase = 'passing'; state.currentVoterIdx = 0;
     // аналитика: начата партия + настройки
@@ -1205,7 +1241,7 @@ function renderSlots() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>`;
-      const player = createPlayer(song.preview, { compact: true, title: song.title, artist: song.artist });
+      const player = createPlayer(song.preview, { compact: true, title: song.title, artist: song.artist, trackId: song.id });
       slot.appendChild(player);
       slot.querySelector('[data-remove]').onclick = () => { stopAudio(); state.slots[i] = null; renderSlots(); updateAddBtn(); };
     } else {
@@ -1315,7 +1351,7 @@ function renderGame(app) {
   `;
 
   const playerArea = $('#playerArea');
-  const player = createPlayer(cur.preview, { title: 'Чья это песня?', maxDuration: settings.previewDuration < 30 ? settings.previewDuration : 0, speed: settings.playbackSpeed !== 1 ? settings.playbackSpeed : 0, playOnce: settings.playOnce });
+  const player = createPlayer(cur.preview, { title: 'Чья это песня?', maxDuration: settings.previewDuration < 30 ? settings.previewDuration : 0, speed: settings.playbackSpeed !== 1 ? settings.playbackSpeed : 0, playOnce: settings.playOnce, trackId: cur.id });
   playerArea.appendChild(player);
 
   const votingArea = $('#votingArea');
@@ -1390,6 +1426,7 @@ function renderGameSequential(app, names, cur) {
       maxDuration: settings.previewDuration < 30 ? settings.previewDuration : 0,
       speed: settings.playbackSpeed !== 1 ? settings.playbackSpeed : 0,
       playOnce: settings.playOnce,
+      trackId: cur.id,
     });
     persistentPlayerRoundIdx = state.idx;
   }
@@ -1674,7 +1711,7 @@ function renderResults(app) {
     detail.appendChild(div);
 
     const playerContainer = div.querySelector(`#songPlayer${si}`);
-    const player = createPlayer(song.preview, { compact: true, title: song.title, artist: song.artist });
+    const player = createPlayer(song.preview, { compact: true, title: song.title, artist: song.artist, trackId: song.id });
     playerContainer.appendChild(player);
   });
 
@@ -1879,7 +1916,7 @@ function renderSettings(app) {
   // App version
   const ver = document.createElement('div');
   ver.style.cssText = 'text-align:center;margin-top:40px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.15<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.16<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
