@@ -1,81 +1,31 @@
-const CACHE_NAME = 'guess-the-song-v4';
-const ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
-];
-
-// Install — cache app shell
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
-  );
+// ═══════════════════════════════════════════════════════════════
+// САМОУНИЧТОЖАЮЩИЙСЯ Service Worker.
+// Старый SW (stale-while-revalidate) застревал в median WebView и держал
+// устаревший кеш index.html (белый экран, версия не обновлялась).
+// Этот SW при активации удаляет все кеши, отрегистрирует себя и
+// перезагружает страницу — после чего игра грузится напрямую из сети.
+// Браузер проверяет sw.js в сети при каждой регистрации, поэтому этот
+// «kill switch» доходит даже до тех, у кого index.html застрял.
+// ═══════════════════════════════════════════════════════════════
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
-// Activate — clean old caches
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
-  );
-  event.waitUntil(clients.claim());
+  event.waitUntil((async () => {
+    // 1. Удаляем все кеши
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    } catch (e) {}
+    // 2. Отрегистрируем сам себя
+    try { await self.registration.unregister(); } catch (e) {}
+    // 3. Перезагружаем открытые вкладки — теперь загрузятся свежими из сети
+    try {
+      const clients = await self.clients.matchAll({ type: 'window' });
+      clients.forEach(c => c.navigate(c.url));
+    } catch (e) {}
+  })());
 });
 
-// Fetch — cache first for app shell, network first for API
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // Deezer API — network only
-  if (url.hostname.includes('deezer.com') || url.hostname.includes('dzcdn.net')) {
-    event.respondWith(fetch(event.request));
-    return;
-  }
-
-  // HTML — stale-while-revalidate: отдаём кеш МГНОВЕННО, обновляем в фоне.
-  // Так игра стартует сразу, а свежая версия подтягивается для следующего запуска.
-  const isHtml = event.request.mode === 'navigate'
-    || event.request.destination === 'document'
-    || url.pathname.endsWith('.html')
-    || url.pathname === '/' || url.pathname === '';
-  if (isHtml) {
-    event.respondWith(
-      caches.match(event.request).then(cached => {
-        const network = fetch(event.request).then(response => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-          }
-          return response;
-        }).catch(() => cached || new Response('<html><body style="background:#110f1f;color:#fff;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center"><div><h2>Нет подключения</h2><p style="color:#6b6490">Для поиска песен нужен интернет</p></div></body></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } }));
-        // Кеш есть → отдаём сразу (сеть обновит в фоне). Нет → ждём сеть.
-        return cached || network;
-      })
-    );
-    return;
-  }
-
-  // Остальное (иконки, манифест) — cache first
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) {
-        fetch(event.request).then(response => {
-          if (response.ok) {
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, response));
-          }
-        }).catch(() => {});
-        return cached;
-      }
-      return fetch(event.request).then(response => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
-        return response;
-      }).catch(() => new Response('', { status: 504 }));
-    })
-  );
-});
+// fetch НЕ перехватываем — все запросы идут напрямую в сеть.
