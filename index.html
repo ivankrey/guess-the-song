@@ -241,6 +241,37 @@ function gtsTrack(type, extra) {
 if (document.readyState === 'complete') gtsTrack('open');
 else window.addEventListener('load', () => gtsTrack('open'));
 
+// ═══════ ВРЕМЯ В ПРИЛОЖЕНИИ ═══════
+// Считаем только АКТИВНОЕ время (когда приложение на экране).
+// Шлём heartbeat раз в 30с — так длительность сохранится, даже если
+// событие закрытия не сработает (частая проблема в WebView).
+let gtsActiveMs = 0;
+let gtsLastTick = Date.now();
+let gtsSentMs = 0;
+
+function gtsAccumulate() {
+  const now = Date.now();
+  if (!document.hidden) gtsActiveMs += now - gtsLastTick;
+  gtsLastTick = now;
+}
+function gtsSendDuration(final) {
+  gtsAccumulate();
+  const sec = Math.round(gtsActiveMs / 1000);
+  // шлём только если накопилось хотя бы +5с с прошлой отправки
+  if (sec - gtsSentMs < 5 && !final) return;
+  if (sec < 1) return;
+  gtsSentMs = sec;
+  gtsTrack('session', { sec });
+}
+
+document.addEventListener('visibilitychange', () => {
+  gtsAccumulate();
+  if (document.hidden) gtsSendDuration(true); // ушли из приложения — фиксируем
+});
+window.addEventListener('pagehide', () => gtsSendDuration(true));
+window.addEventListener('beforeunload', () => gtsSendDuration(true));
+setInterval(() => gtsSendDuration(false), 30000);
+
 // ═══════ ФОРМА «СООБЩИТЬ О ПРОБЛЕМЕ» ═══════
 const GTS_FEEDBACK_URL = 'https://roydisstat.ru/gts/feedback';
 function openFeedback() {
@@ -1998,7 +2029,7 @@ function renderSettings(app) {
   div.appendChild(fbBtn);
 
   ver.style.cssText = 'text-align:center;margin-top:24px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.22<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.23<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
