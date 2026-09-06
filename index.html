@@ -379,6 +379,43 @@ let state = {
   currentVoterIdx: 0,
 };
 
+// ═══════ СОХРАНЕНИЕ ИГРЫ ═══════
+// Android выгружает WebView при сворачивании (кнопка «Назад»), и игра терялась.
+// Держим снимок партии в localStorage и восстанавливаем при возврате.
+const GTS_STATE_KEY = 'gts_game_state';
+const GTS_STATE_TTL = 6 * 3600 * 1000; // не восстанавливаем партии старше 6 часов
+
+function saveGameState() {
+  try {
+    if (state.phase === 'setup') { localStorage.removeItem(GTS_STATE_KEY); return; }
+    localStorage.setItem(GTS_STATE_KEY, JSON.stringify({
+      phase: state.phase,
+      players: state.players,
+      shuffled: state.shuffled,
+      idx: state.idx,
+      guesses: state.guesses,
+      roundPhase: state.roundPhase,
+      currentVoterIdx: state.currentVoterIdx,
+      _finishTracked: state._finishTracked,
+      savedAt: Date.now(),
+    }));
+  } catch {}
+}
+
+function loadGameState() {
+  try {
+    const raw = localStorage.getItem(GTS_STATE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || !s.savedAt || Date.now() - s.savedAt > GTS_STATE_TTL) { localStorage.removeItem(GTS_STATE_KEY); return null; }
+    if (!Array.isArray(s.shuffled) || !s.shuffled.length) { localStorage.removeItem(GTS_STATE_KEY); return null; }
+    if (!s.players || !Object.keys(s.players).length) { localStorage.removeItem(GTS_STATE_KEY); return null; }
+    return s;
+  } catch { return null; }
+}
+
+function clearGameState() { try { localStorage.removeItem(GTS_STATE_KEY); } catch {} }
+
 function initSlots() {
   state.slots = Array(settings.songsPerPlayer).fill(null);
 }
@@ -1130,6 +1167,8 @@ function pauseSvg(s) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 2
 // ═══════ RENDER ═══════
 function render() {
   const app = $('#app');
+
+  saveGameState(); // снимок партии на случай сворачивания приложения
 
   // Stop audio on screen change (но сохраняем постоянный плеер раунда)
   stopAudio({ preservePersistent: true });
@@ -2045,7 +2084,7 @@ function renderSettings(app) {
   div.appendChild(fbBtn);
 
   ver.style.cssText = 'text-align:center;margin-top:24px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.24<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.25<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
@@ -2102,7 +2141,31 @@ function renderSettings(app) {
   });
 }
 
-// Start
+// ═══════ КНОПКА «НАЗАД» НА ТЕЛЕФОНЕ ═══════
+// Во время партии «Назад» сворачивала приложение. Ставим «ловушку» в истории:
+// пока идёт игра, первое нажатие остаётся внутри игры и не сворачивает её.
+function gtsBackGuard() {
+  try { history.pushState({ gts: true }, ''); } catch {}
+}
+window.addEventListener('popstate', () => {
+  if (state.phase === 'game') gtsBackGuard();
+});
+gtsBackGuard();
+
+// Start — восстанавливаем незаконченную партию, если приложение свернули/выгрузили
+(function restoreGame() {
+  const saved = loadGameState();
+  if (!saved) return;
+  state.phase = saved.phase;
+  state.players = saved.players;
+  state.shuffled = saved.shuffled;
+  state.idx = saved.idx;
+  state.guesses = saved.guesses;
+  state.roundPhase = saved.roundPhase;
+  state.currentVoterIdx = saved.currentVoterIdx;
+  state._finishTracked = saved._finishTracked;
+  persistentPlayerRoundIdx = -1; // плеер пересоздастся под текущий раунд
+})();
 render();
 </script>
 </body>
