@@ -397,6 +397,7 @@ function saveGameState() {
       roundPhase: state.roundPhase,
       currentVoterIdx: state.currentVoterIdx,
       _finishTracked: state._finishTracked,
+      _historySaved: state._historySaved,
       savedAt: Date.now(),
     }));
   } catch {}
@@ -1165,10 +1166,15 @@ function playSvg(s) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 24
 function pauseSvg(s) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="${'#000'}" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>`; }
 
 // ═══════ RENDER ═══════
+// Снимок партии делаем ПОСЛЕ отрисовки: renderResults проставляет флаги
+// (история записана / аналитика отправлена), и они должны попасть в сохранение.
 function render() {
-  const app = $('#app');
+  renderScreen();
+  saveGameState();
+}
 
-  saveGameState(); // снимок партии на случай сворачивания приложения
+function renderScreen() {
+  const app = $('#app');
 
   // Stop audio on screen change (но сохраняем постоянный плеер раунда)
   stopAudio({ preservePersistent: true });
@@ -1351,6 +1357,7 @@ function renderSetup(app) {
     state.roundPhase = 'passing'; state.currentVoterIdx = 0;
     // аналитика: начата партия + настройки
     state._finishTracked = false;
+    state._historySaved = false;
     gtsTrack('game_start', {
       players: names.length,
       gsn: settings.guessSongName ? 1 : 0,       // режим угадывания песни
@@ -1801,7 +1808,12 @@ function renderResults(app) {
     maxScore: maxScore,
     songs: state.shuffled.map(s => ({ title: s.title, artist: s.artist, author: s.author })),
   };
-  addGameToHistory(gameRecord);
+  // только один раз за партию: renderResults вызывается при каждом рендере
+  // экрана результатов (в т.ч. после возврата в приложение)
+  if (!state._historySaved) {
+    state._historySaved = true;
+    addGameToHistory(gameRecord);
+  }
 
   let html = `
     <div style="text-align:center;margin-bottom:32px" class="fade-in">
@@ -2084,7 +2096,7 @@ function renderSettings(app) {
   div.appendChild(fbBtn);
 
   ver.style.cssText = 'text-align:center;margin-top:24px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.25<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.26<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
@@ -2164,6 +2176,7 @@ gtsBackGuard();
   state.roundPhase = saved.roundPhase;
   state.currentVoterIdx = saved.currentVoterIdx;
   state._finishTracked = saved._finishTracked;
+  state._historySaved = saved._historySaved;
   persistentPlayerRoundIdx = -1; // плеер пересоздастся под текущий раунд
 })();
 render();
