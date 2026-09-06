@@ -955,12 +955,28 @@ function stopAudio(opts = {}) {
   if (opts.preservePersistent && persistentPlayer && currentAudio === persistentPlayer._audio) return;
   currentAudio.pause();
   currentAudio.currentTime = 0;
+  // сбрасываем намерение играть: иначе при истёкшем токене трек «починится»
+  // и заиграет параллельно с тем, который слушают сейчас
+  currentAudio._wantPlay = false;
+}
+
+// Полностью гасит audio. КРИТИЧНО: помечает его уничтоженным, иначе очистка src
+// вызывает событие error, и обработчик «починки токена» воскрешал трек прошлого раунда.
+function destroyAudio(a) {
+  if (!a) return;
+  try {
+    a._destroyed = true;
+    a._wantPlay = false;
+    a.pause();
+    a.removeAttribute('src');
+    a.load();
+  } catch {}
+  if (currentAudio === a) currentAudio = null;
 }
 
 function cleanupPersistentPlayer() {
   if (persistentPlayer) {
-    const a = persistentPlayer._audio;
-    if (a) { try { a.pause(); a.src = ''; } catch {} }
+    destroyAudio(persistentPlayer._audio);
     if (persistentPlayer.parentNode) persistentPlayer.parentNode.removeChild(persistentPlayer);
     persistentPlayer = null;
     persistentPlayerRoundIdx = -1;
@@ -988,17 +1004,17 @@ function createPlayer(src, opts = {}) {
 
   // Если mp3 не загрузился (истёк токен превью) — обновляем ссылку и пробуем снова
   audio.addEventListener('error', async () => {
-    if (refreshTried || !trackId) return;
+    if (audio._destroyed || refreshTried || !trackId) return;
     refreshTried = true;
     const wantPlay = !audio.paused || audio._wantPlay;
     const fresh = await refreshPreview(trackId);
-    if (fresh) {
-      audio.src = fresh;
-      audio.load();
-      if (wantPlay) {
-        if (speed) audio.playbackRate = speed;
-        audio.play().catch(() => {});
-      }
+    // за время запроса плеер мог быть уничтожен (смена раунда) — не воскрешаем
+    if (audio._destroyed || !fresh) return;
+    audio.src = fresh;
+    audio.load();
+    if (wantPlay) {
+      if (speed) audio.playbackRate = speed;
+      audio.play().catch(() => {});
     }
   });
   if (speed) {
@@ -1071,7 +1087,7 @@ function createPlayer(src, opts = {}) {
     fill.style.width = dur ? `${(audio.currentTime/dur)*100}%` : '0%';
     timeEl.textContent = `${fmt(audio.currentTime)} / ${fmt(dur)}`;
   });
-  audio.addEventListener('ended', () => { playing = false; playBtn.classList.remove('playing'); playBtn.innerHTML = playSvg(compact ? 16 : 20); fill.style.width = '0%'; lockAfterPlayOnce(); });
+  audio.addEventListener('ended', () => { playing = false; audio._wantPlay = false; playBtn.classList.remove('playing'); playBtn.innerHTML = playSvg(compact ? 16 : 20); fill.style.width = '0%'; lockAfterPlayOnce(); });
   audio.addEventListener('play', () => { playing = true; playBtn.classList.add('playing'); playBtn.innerHTML = pauseSvg(compact ? 16 : 20); });
   audio.addEventListener('pause', () => { playing = false; playBtn.classList.remove('playing'); playBtn.innerHTML = playSvg(compact ? 16 : 20); });
 
@@ -2029,7 +2045,7 @@ function renderSettings(app) {
   div.appendChild(fbBtn);
 
   ver.style.cssText = 'text-align:center;margin-top:24px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.23<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.24<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
