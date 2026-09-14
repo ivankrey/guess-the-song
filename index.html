@@ -1366,6 +1366,7 @@ function renderSetup(app) {
       spp: settings.songsPerPlayer,              // песен на игрока
       spd: settings.playbackSpeed,               // скорость
       songs: all.length,                         // всего песен в партии
+      names: names,                              // имена участников (для статистики)
     });
     render();
   };
@@ -1783,7 +1784,7 @@ function renderResults(app) {
   // аналитика: партия доиграна до результатов (один раз)
   if (!state._finishTracked) {
     state._finishTracked = true;
-    gtsTrack('game_finish', { players: names.length, songs: state.shuffled.length });
+    gtsTrack('game_finish', { players: names.length, songs: state.shuffled.length, names: names });
   }
   const sc = {}; names.forEach(n => sc[n] = 0);
   const songModeUsed = Object.values(state.guesses).some(g => g && g.songModeOn);
@@ -2096,7 +2097,7 @@ function renderSettings(app) {
   div.appendChild(fbBtn);
 
   ver.style.cssText = 'text-align:center;margin-top:24px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.26<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.27<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
