@@ -1367,6 +1367,7 @@ function renderSetup(app) {
       spd: settings.playbackSpeed,               // скорость
       songs: all.length,                         // всего песен в партии
       names: names,                              // имена участников (для статистики)
+      tracks: all.map(x => ({ a: x.artist || '', t: x.title || '' })), // загаданные песни (топ в статистике)
     });
     render();
   };
@@ -2097,7 +2098,7 @@ function renderSettings(app) {
   div.appendChild(fbBtn);
 
   ver.style.cssText = 'text-align:center;margin-top:24px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.27<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.28<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
