@@ -285,8 +285,8 @@ function openFeedback() {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--c-muted)" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <label class="lbl">Ваш email (для ответа)</label>
-      <input type="text" id="fbEmail" placeholder="you@example.com" style="margin-bottom:14px">
+      <label class="lbl">Ваш email (обязательно - чтобы мы могли ответить)</label>
+      <input type="email" inputmode="email" autocomplete="email" id="fbEmail" placeholder="you@example.com" style="margin-bottom:14px">
       <label class="lbl">Опишите проблему</label>
       <textarea id="fbMsg" placeholder="Что случилось?" style="width:100%;min-height:110px;background:#151225;border:1px solid #3b3558;border-radius:10px;padding:12px 14px;color:#e2e0ea;font-size:14px;outline:none;resize:vertical;font-family:inherit"></textarea>
       <div id="fbStatus" style="font-size:13px;margin-top:10px;min-height:18px"></div>
@@ -308,6 +308,7 @@ function openFeedback() {
     const email = $('#fbEmail', overlay).value.trim();
     const message = $('#fbMsg', overlay).value.trim();
     const status = $('#fbStatus', overlay);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { status.style.color = '#ef4444'; status.textContent = 'Укажите email, чтобы мы могли ответить.'; $('#fbEmail', overlay).focus(); return; }
     if (!message) { status.style.color = '#ef4444'; status.textContent = 'Напишите, что случилось.'; return; }
     const btn = $('#fbSend', overlay);
     btn.disabled = true; btn.textContent = 'Отправляем...';
@@ -322,7 +323,7 @@ function openFeedback() {
         overlay.querySelector('div').innerHTML = `<div style="text-align:center;padding:20px 0">
           <div style="font-size:44px;margin-bottom:10px">✅</div>
           <div style="font-size:17px;font-weight:900;color:var(--c-text-h);margin-bottom:6px">Спасибо!</div>
-          <div style="color:var(--c-muted);font-size:13px">Сообщение отправлено. Мы свяжемся с вами${email ? ' по указанной почте' : ''}.</div>
+          <div style="color:var(--c-muted);font-size:13px">Сообщение отправлено. Мы ответим на указанную почту.</div>
           <button class="btn btn-primary" id="fbOk" style="margin-top:18px">Закрыть</button>
         </div>`;
         $('#fbOk', overlay).onclick = close;
@@ -2098,7 +2099,7 @@ function renderSettings(app) {
   div.appendChild(fbBtn);
 
   ver.style.cssText = 'text-align:center;margin-top:24px;color:var(--c-muted3);font-size:12px';
-  ver.innerHTML = `Угадай песню v1.3.28<br>Музыкальная игра для компании друзей`;
+  ver.innerHTML = `Угадай песню v1.3.29<br>Музыкальная игра для компании друзей`;
   div.appendChild(ver);
 
   app.appendChild(div);
